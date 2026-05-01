@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>{{ my_team }} Analytics — {{ world }}</h2>
+  <p class="muted">Paste a WhatIfSports Hoops Dynasty box score URL.</p>
+  <p><a href="/season">View season stats →</a></p>
+  <form method="post" action="/import">
+    <input type="text" name="url" placeholder="https://www.whatifsports.com/hd/GameResults/BoxScore.aspx?gid=..." required>
+    <button type="submit">Import</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Admin</h2>
+  <p class="muted">Use this if an earlier parser version imported blank games.</p>
+  <form method="post" action="/admin/reset" onsubmit="return confirm('Delete all imported games and stats?')">
+    <button type="submit">Reset database</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Imported Games</h2>
+  {% if games %}
+  <table>
+    <tr><th>ID</th><th>Date</th><th>Game</th><th>Score</th></tr>
+    {% for g in games %}
+    <tr>
+      <td>{{ g.id }}</td>
+      <td>{{ g.game_date or "" }}</td>
+      <td><a href="/games/{{ g.id }}">{{ g.away_team }} at {{ g.home_team }}</a></td>
+      <td>{{ g.away_score }} - {{ g.home_score }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No games imported yet.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>{{ my_team }} Top Single-Game True BPR</h2>
+  {% if top_players %}
+  <table>
+    <tr><th>Player</th><th>Team</th><th>MIN</th><th>PTS</th><th>OBPR</th><th>DBPR</th><th>BPR</th></tr>
+    {% for p in top_players %}
+    <tr>
+      <td>{{ p.player }}</td><td>{{ p.team }}</td><td>{{ p.minutes }}</td><td>{{ p.pts }}</td>
+      <td>{{ "%.2f"|format(p.obpr) }}</td><td>{{ "%.2f"|format(p.dbpr) }}</td>
+      <td><strong>{{ "%.2f"|format(p.bpr) }}</strong></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Import a game to see player ratings.</p>
+  {% endif %}
+</div>
+{% endblock %}
