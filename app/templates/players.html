@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>All Player Game Ratings</h2>
+  <table>
+    <tr>
+      <th>Player</th><th>Team</th><th>Game</th><th>MIN</th><th>PTS</th>
+      <th>BoxOBPR</th><th>BoxDBPR</th><th>OBPR</th><th>DBPR</th><th>BPR</th>
+    </tr>
+    {% for p in rows %}
+    <tr>
+      <td>{{ p.player }}</td><td>{{ p.team }}</td><td><a href="/games/{{ p.game_id }}">Game {{ p.game_id }}</a></td>
+      <td>{{ p.minutes }}</td><td>{{ p.pts }}</td>
+      <td>{{ "%.2f"|format(p.box_obpr) }}</td><td>{{ "%.2f"|format(p.box_dbpr) }}</td>
+      <td>{{ "%.2f"|format(p.obpr) }}</td><td>{{ "%.2f"|format(p.dbpr) }}</td>
+      <td><strong>{{ "%.2f"|format(p.bpr) }}</strong></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

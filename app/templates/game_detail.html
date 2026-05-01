@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>{{ game.away_team }} at {{ game.home_team }}</h2>
+  <p><span class="pill">{{ game.game_date or "date unknown" }}</span> <span class="pill">{{ game.away_score }} - {{ game.home_score }}</span></p>
+  <p><a href="{{ game.source_url }}" target="_blank">Open original game</a></p>
+</div>
+
+<div class="card">
+  <h2>Player Ratings</h2>
+  <table>
+    <tr>
+      <th>Player</th><th>Team</th><th>Pos</th><th>MIN</th>
+      <th>PTS</th><th>REB</th><th>AST</th><th>TO</th><th>STL</th><th>BLK</th>
+      <th>BoxOBPR</th><th>BoxDBPR</th><th>BPR</th>
+    </tr>
+    {% for p in stats %}
+    <tr>
+      <td>{{ p.player }}</td><td>{{ p.team }}</td><td>{{ p.pos }}</td><td>{{ p.minutes }}</td>
+      <td>{{ p.pts }}</td><td>{{ p.reb }}</td><td>{{ p.ast }}</td><td>{{ p.tov }}</td><td>{{ p.stl }}</td><td>{{ p.blk }}</td>
+      <td>{{ "%.2f"|format(p.box_obpr) }}</td><td>{{ "%.2f"|format(p.box_dbpr) }}</td>
+      <td><strong>{{ "%.2f"|format(p.bpr) }}</strong></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Play-by-Play Preview</h2>
+  <table>
+    <tr><th>#</th><th>Half</th><th>Time</th><th>Team</th><th>Type</th><th>Description</th><th>Score</th></tr>
+    {% for e in events %}
+    <tr>
+      <td>{{ e.event_number }}</td><td>{{ e.half }}</td><td>{{ e.clock }}</td><td>{{ e.team or "" }}</td>
+      <td>{{ e.event_type }}</td><td>{{ e.description }}</td><td>{{ e.score or "" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
