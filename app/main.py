@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 
 from app.database import get_session, init_db
 from app.models import Game, PlayerGameStat, PlayByPlayEvent
@@ -41,8 +41,23 @@ def import_game(url: str = Form(...), session: Session = Depends(get_session)):
             select(Game).where(Game.wis_game_id == parsed.wis_game_id)
         ).first()
 
+    # If a previous parser version created a blank shell for this game,
+    # remove it and re-import with the current parser.
     if existing:
-        return RedirectResponse(f"/games/{existing.id}", status_code=303)
+        existing_stats = session.exec(
+            select(PlayerGameStat).where(PlayerGameStat.game_id == existing.id)
+        ).all()
+        existing_events = session.exec(
+            select(PlayByPlayEvent).where(PlayByPlayEvent.game_id == existing.id)
+        ).all()
+
+        if existing_stats and existing_events:
+            return RedirectResponse(f"/games/{existing.id}", status_code=303)
+
+        session.exec(delete(PlayerGameStat).where(PlayerGameStat.game_id == existing.id))
+        session.exec(delete(PlayByPlayEvent).where(PlayByPlayEvent.game_id == existing.id))
+        session.delete(existing)
+        session.commit()
 
     away = parsed.summary_rows[0] if len(parsed.summary_rows) > 0 else {}
     home = parsed.summary_rows[1] if len(parsed.summary_rows) > 1 else {}
@@ -92,6 +107,16 @@ def game_detail(
         "game_detail.html",
         {"request": request, "game": game, "stats": stats, "events": events[:200]},
     )
+
+
+
+@app.post("/admin/reset")
+def reset_database(session: Session = Depends(get_session)):
+    session.exec(delete(PlayerGameStat))
+    session.exec(delete(PlayByPlayEvent))
+    session.exec(delete(Game))
+    session.commit()
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/players", response_class=HTMLResponse)

@@ -41,3 +41,8 @@ Python version:
 ## v2 parser fix
 
 Handles WhatIfSports player rows where position and player name are joined, e.g. `cGeorge Nicoll`, and captures lineup/substitution blocks.
+
+
+## v3 fix
+
+Adds reset database button and automatically re-imports blank duplicate games created by older parser versions.

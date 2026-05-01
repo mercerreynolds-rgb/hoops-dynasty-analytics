@@ -5,6 +5,7 @@
   <h2>{{ game.away_team }} at {{ game.home_team }}</h2>
   <p><span class="pill">{{ game.game_date or "date unknown" }}</span> <span class="pill">{{ game.away_score }} - {{ game.home_score }}</span></p>
   <p><a href="{{ game.source_url }}" target="_blank">Open original game</a></p>
+<p class="muted">Rows shown below: {{ stats|length }} player stat rows, {{ events|length }} play-by-play preview rows.</p>
 </div>
 
 <div class="card">

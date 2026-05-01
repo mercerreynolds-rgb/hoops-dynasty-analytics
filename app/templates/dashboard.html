@@ -11,6 +11,14 @@
 </div>
 
 <div class="card">
+  <h2>Admin</h2>
+  <p class="muted">Use this if an earlier parser version imported blank games.</p>
+  <form method="post" action="/admin/reset" onsubmit="return confirm('Delete all imported games and stats?')">
+    <button type="submit">Reset database</button>
+  </form>
+</div>
+
+<div class="card">
   <h2>Imported Games</h2>
   {% if games %}
   <table>
