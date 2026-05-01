@@ -15,6 +15,7 @@ LAST_FETCH_DEBUG = {
     "text_preview": "",
     "contains_final": False,
     "contains_time_team_play_score": False,
+    "contains_split_pbp_header": False,
     "contains_boxscore_title": False,
 }
 
@@ -67,10 +68,16 @@ def clean_lines_from_html(html: str) -> list[str]:
     LAST_FETCH_DEBUG["text_preview"] = joined[:3000]
     LAST_FETCH_DEBUG["contains_final"] = "Final" in joined
     LAST_FETCH_DEBUG["contains_time_team_play_score"] = "Time Team Play Score" in joined
+    LAST_FETCH_DEBUG["contains_split_pbp_header"] = contains_sequence(lines, ["Time", "Team", "Play", "Score"])
     LAST_FETCH_DEBUG["contains_boxscore_title"] = "Game Boxscore" in joined or "Boxscore" in joined
     print("FETCH DEBUG:", LAST_FETCH_DEBUG, flush=True)
 
     return lines
+
+
+def contains_sequence(lines: list[str], seq: list[str]) -> bool:
+    n = len(seq)
+    return any(lines[i:i+n] == seq for i in range(0, max(len(lines) - n + 1, 0)))
 
 
 def extract_wis_game_id(url: str) -> str | None:
@@ -78,90 +85,73 @@ def extract_wis_game_id(url: str) -> str | None:
     return m.group(1) if m else None
 
 
-def split_made_attempt(value: str) -> tuple[int, int]:
-    made, att = value.split("-")
-    return int(made), int(att)
-
-
-PLAYER_ROW_RE = re.compile(
-    r"^(?P<pos>c|pf|sf|sg|pg)\s*"
-    r"(?P<player>.+?)\s+"
-    r"(?P<min>\d+)\s+"
-    r"(?P<fg>\d+-\d+)\s+"
-    r"(?P<fg3>\d+-\d+)\s+"
-    r"(?P<ft>\d+-\d+)\s+"
-    r"(?P<orb>\d+)\s+"
-    r"(?P<reb>\d+)\s+"
-    r"(?P<ast>\d+)\s+"
-    r"(?P<to>\d+)\s+"
-    r"(?P<stl>\d+)\s+"
-    r"(?P<blk>\d+)\s+"
-    r"(?P<pf>\d+)\s+"
-    r"(?P<pts>\d+)$",
-    flags=re.I,
-)
-
-
-def looks_like_player_stat_line(line: str) -> bool:
-    return bool(PLAYER_ROW_RE.match(line))
-
-
-def parse_player_stat_line(line: str, team: str, role: str) -> dict:
-    m = PLAYER_ROW_RE.match(line)
-    if not m:
-        raise ValueError(f"Could not parse player stat line: {line}")
-
-    fgm, fga = split_made_attempt(m["fg"])
-    fg3m, fg3a = split_made_attempt(m["fg3"])
-    ftm, fta = split_made_attempt(m["ft"])
-
-    return {
-        "team": team,
-        "role": role,
-        "pos": m["pos"].lower(),
-        "player": m["player"].strip(),
-        "minutes": int(m["min"]),
-        "fgm": fgm,
-        "fga": fga,
-        "fg3m": fg3m,
-        "fg3a": fg3a,
-        "ftm": ftm,
-        "fta": fta,
-        "orb": int(m["orb"]),
-        "reb": int(m["reb"]),
-        "ast": int(m["ast"]),
-        "tov": int(m["to"]),
-        "stl": int(m["stl"]),
-        "blk": int(m["blk"]),
-        "pf": int(m["pf"]),
-        "pts": int(m["pts"]),
-    }
+def is_record_header(line: str) -> bool:
+    return bool(re.match(r"^.+\(\d+-\d+,\s*\d+-\d+\)$", line))
 
 
 def parse_scoreboard(lines: list[str]) -> list[dict]:
-    text = "\n".join(lines)
-    date_match = re.search(r"Final\s*-\s*\n?(\d{1,2}/\d{1,2}/\d{4})", text)
-    date = date_match.group(1) if date_match else None
+    date = None
+    for i, line in enumerate(lines):
+        if line == "Final" and i + 2 < len(lines) and lines[i + 1] == "-":
+            if re.match(r"\d{1,2}/\d{1,2}/\d{4}", lines[i + 2]):
+                date = lines[i + 2]
+                break
 
     rows = []
-    for line in lines:
-        m = re.match(
-            r"^(#\d+\s+)?(?P<team>[A-Za-z0-9\.\s&'\-]+?)\s+(?P<h1>\d+)\s+(?P<h2>\d+)\s+(?P<final>\d+)$",
-            line,
-        )
-        if not m:
-            continue
-        team = m.group("team").strip()
-        if team and not team.isdigit() and team.lower() not in {"time team play score"}:
-            rows.append(
-                {
+    # Pattern from fetched text:
+    # Final - date 88 1 2 F #6 E. Conn 42 46 88 #16 Whitworth 54 44 98 98
+    for i in range(len(lines) - 4):
+        if re.match(r"^#?\d*", lines[i]) is not None:
+            m = re.match(r"^(#\d+\s+)?(?P<team>.+)$", lines[i])
+            if (
+                m
+                and i + 3 < len(lines)
+                and lines[i + 1].isdigit()
+                and lines[i + 2].isdigit()
+                and lines[i + 3].isdigit()
+            ):
+                team = m.group("team").strip()
+                # Avoid grabbing player stat rows or junk.
+                if (
+                    team
+                    and not team.isdigit()
+                    and not team.lower() in {"min", "fgm-a", "points"}
+                    and not re.match(r"^(c|pf|sf|sg|pg)$", team, flags=re.I)
+                    and len(rows) < 2
+                    and (team.startswith("#") or any(ch.isalpha() for ch in team))
+                ):
+                    # Strip ranking if present.
+                    team = re.sub(r"^#\d+\s+", "", team)
+                    if i > 0 and lines[i-1] == "F":
+                        pass
+                    rows.append({
+                        "date": date,
+                        "team": team,
+                        "half1": int(lines[i + 1]),
+                        "half2": int(lines[i + 2]),
+                        "final": int(lines[i + 3]),
+                    })
+        if len(rows) >= 2:
+            return rows[:2]
+
+    # More targeted fallback after F marker.
+    try:
+        f_idx = lines.index("F")
+        i = f_idx + 1
+        while i < len(lines) - 3 and len(rows) < 2:
+            if lines[i].startswith("#") and lines[i+1].isdigit() and lines[i+2].isdigit() and lines[i+3].isdigit():
+                rows.append({
                     "date": date,
-                    "team": team,
-                    "half1": int(m.group("h1")),
-                    "half2": int(m.group("h2")),
-                    "final": int(m.group("final")),
-                }
-            )
+                    "team": re.sub(r"^#\d+\s+", "", lines[i]),
+                    "half1": int(lines[i+1]),
+                    "half2": int(lines[i+2]),
+                    "final": int(lines[i+3]),
+                })
+                i += 4
+            else:
+                i += 1
+    except ValueError:
+        pass
 
     return rows[:2]
 
@@ -170,49 +160,71 @@ def parse_boxscore(lines: list[str]) -> list[dict]:
     rows = []
     current_team = None
     current_role = None
+    i = 0
 
-    for i, line in enumerate(lines):
-        # Team headers can appear as "E. Connecticut St. (22-6, 15-1)".
-        team_header = re.match(r"^(.+?)\s+\(\d+-\d+,\s*\d+-\d+\)$", line)
-        if team_header:
-            current_team = team_header.group(1).strip()
+    while i < len(lines):
+        line = lines[i]
+
+        if is_record_header(line):
+            current_team = re.sub(r"\s+\(\d+-\d+,\s*\d+-\d+\)$", "", line).strip()
             current_role = None
+            i += 1
             continue
 
-        if line.strip().startswith("STARTERS"):
+        if line == "STARTERS":
             current_role = "starter"
+            i += 1
+            # skip headers until first pos
             continue
 
-        if line.strip().startswith("BENCH"):
+        if line == "BENCH":
             current_role = "bench"
+            i += 1
             continue
 
-        if current_team and current_role and looks_like_player_stat_line(line):
-            rows.append(parse_player_stat_line(line, current_team, current_role))
-
-        if line.startswith("Totals "):
+        if line == "Totals":
             current_role = None
+            i += 15
+            continue
 
-    # Fallback: infer teams from scoreboard if header matching failed.
-    if not rows:
-        summary = parse_scoreboard(lines)
-        teams = [r["team"] for r in summary]
-        team_idx = 0
-        role = None
-        for line in lines:
-            if line.strip().startswith("STARTERS"):
-                role = "starter"
-                continue
-            if line.strip().startswith("BENCH"):
-                role = "bench"
-                continue
-            if line.startswith("Totals "):
-                if team_idx < 1:
-                    team_idx += 1
-                role = None
-                continue
-            if role and team_idx < len(teams) and looks_like_player_stat_line(line):
-                rows.append(parse_player_stat_line(line, teams[team_idx], role))
+        # Cell-by-cell player rows:
+        # pos, player, min, fg, fg3, ft, orb, reb, ast, to, stl, blk, pf, pts
+        if (
+            current_team
+            and current_role
+            and re.match(r"^(c|pf|sf|sg|pg)$", line, flags=re.I)
+            and i + 13 < len(lines)
+            and re.match(r"^\d+$", lines[i + 2])
+            and re.match(r"^\d+-\d+$", lines[i + 3])
+            and re.match(r"^\d+-\d+$", lines[i + 4])
+            and re.match(r"^\d+-\d+$", lines[i + 5])
+        ):
+            row = {
+                "team": current_team,
+                "role": current_role,
+                "pos": lines[i].lower(),
+                "player": lines[i + 1],
+                "minutes": int(lines[i + 2]),
+                "fgm": int(lines[i + 3].split("-")[0]),
+                "fga": int(lines[i + 3].split("-")[1]),
+                "fg3m": int(lines[i + 4].split("-")[0]),
+                "fg3a": int(lines[i + 4].split("-")[1]),
+                "ftm": int(lines[i + 5].split("-")[0]),
+                "fta": int(lines[i + 5].split("-")[1]),
+                "orb": int(lines[i + 6]),
+                "reb": int(lines[i + 7]),
+                "ast": int(lines[i + 8]),
+                "tov": int(lines[i + 9]),
+                "stl": int(lines[i + 10]),
+                "blk": int(lines[i + 11]),
+                "pf": int(lines[i + 12]),
+                "pts": int(lines[i + 13]),
+            }
+            rows.append(row)
+            i += 14
+            continue
+
+        i += 1
 
     return rows
 
@@ -246,138 +258,124 @@ def classify_event(description: str) -> str:
     return "other"
 
 
-def is_time_line(line: str) -> bool:
-    return bool(re.match(r"^\d{1,2}:\d{2}\s+", line))
+def find_pbp_start(lines: list[str]) -> int | None:
+    for i in range(len(lines) - 3):
+        if lines[i:i+4] == ["Time", "Team", "Play", "Score"]:
+            return i + 4
+    for i, line in enumerate(lines):
+        if line == "Time Team Play Score":
+            return i + 1
+    return None
 
 
-def split_team_from_description(body: str, known_teams: list[str]) -> tuple[str | None, str]:
-    for team in sorted(known_teams, key=len, reverse=True):
-        if body.startswith(team):
-            return team, body[len(team):].strip()
-    return None, body
+def parse_lineup_block(lines: list[str], i: int, half: str, event_number: int) -> tuple[dict, int]:
+    # Expected:
+    # Lineup, Team, PG -, Name, (fresh), SG -, Name...
+    team = lines[i + 1] if i + 1 < len(lines) else None
+    details = []
+    j = i + 2
+    while j + 1 < len(lines):
+        if re.match(r"^\d{1,2}:\d{2}$", lines[j]) or lines[j] in {"Lineup", "Subs", "Game Plan", "1st Half", "2nd Half"}:
+            break
+        if re.match(r"^(PG|SG|SF|PF|C)\s*-$", lines[j], flags=re.I):
+            pos = lines[j].replace("-", "").strip()
+            player = lines[j + 1] if j + 1 < len(lines) else ""
+            status = lines[j + 2] if j + 2 < len(lines) and lines[j + 2].startswith("(") else ""
+            details.append(f"{pos} - {player} {status}".strip())
+            j += 3 if status else 2
+            continue
+        j += 1
 
-
-def parse_pbp_event(line: str, half: str | None, known_teams: list[str]) -> dict | None:
-    if not is_time_line(line):
-        return None
-
-    m = re.match(
-        r"^(?P<time>\d{1,2}:\d{2})\s+(?P<body>.+?)\s+(?P<score>\d+-\d+)$",
-        line,
-    )
-
-    if m:
-        body = m.group("body").strip()
-        team, description = split_team_from_description(body, known_teams)
-        return {
-            "half": half,
-            "clock": m.group("time"),
-            "team": team,
-            "description": description,
-            "score": m.group("score"),
-            "event_type": classify_event(description),
-        }
-
-    raw_time = line[:5]
-    body = line[6:].strip()
-    team, description = split_team_from_description(body, known_teams)
     return {
+        "event_number": event_number,
         "half": half,
-        "clock": raw_time,
+        "clock": None,
         "team": team,
-        "description": description,
+        "description": " | ".join(details),
         "score": None,
-        "event_type": classify_event(description),
-    }
+        "event_type": "lineup",
+    }, j
+
+
+def parse_subs_block(lines: list[str], i: int, half: str, event_number: int) -> tuple[dict, int]:
+    team = lines[i + 1] if i + 1 < len(lines) else None
+    details = []
+    j = i + 2
+    while j < len(lines):
+        if re.match(r"^\d{1,2}:\d{2}$", lines[j]) or lines[j] in {"Lineup", "Subs", "Game Plan", "1st Half", "2nd Half"}:
+            break
+        details.append(lines[j])
+        j += 1
+    return {
+        "event_number": event_number,
+        "half": half,
+        "clock": None,
+        "team": team,
+        "description": " | ".join(details),
+        "score": None,
+        "event_type": "substitution",
+    }, j
 
 
 def parse_play_by_play(lines: list[str], known_teams: list[str]) -> list[dict]:
     rows = []
-    in_pbp = False
-    half = "1st Half"
+    start = find_pbp_start(lines)
+    if start is None:
+        return rows
 
-    i = 0
+    half = "1st Half"
+    i = start
+
     while i < len(lines):
         line = lines[i]
 
-        if line == "Time Team Play Score":
-            in_pbp = True
+        if line in {"1st Half", "2nd Half"}:
+            half = line
             i += 1
             continue
 
-        if not in_pbp:
-            i += 1
+        if line == "Lineup":
+            event, i = parse_lineup_block(lines, i, half, len(rows) + 1)
+            rows.append(event)
             continue
 
-        if line == "1st Half":
-            half = "1st Half"
-            i += 1
-            continue
-        if line == "2nd Half":
-            half = "2nd Half"
-            i += 1
+        if line == "Subs":
+            event, i = parse_subs_block(lines, i, half, len(rows) + 1)
+            rows.append(event)
             continue
 
-        if line.startswith("Lineup "):
-            team = line.replace("Lineup ", "", 1).strip()
-            details = []
-            j = i + 1
-            while j < len(lines) and not is_time_line(lines[j]) and not lines[j].startswith(("Lineup ", "Subs ", "Game Plan ")):
-                if " - " in lines[j]:
-                    details.append(lines[j])
-                j += 1
-
+        if line == "Game Plan":
+            team = lines[i + 1] if i + 1 < len(lines) else None
+            desc = lines[i + 2] if i + 2 < len(lines) else ""
             rows.append({
                 "event_number": len(rows) + 1,
                 "half": half,
                 "clock": None,
                 "team": team,
-                "description": " | ".join(details) if details else line,
-                "score": None,
-                "event_type": "lineup",
-            })
-            i = j
-            continue
-
-        if line.startswith("Subs "):
-            team = line.replace("Subs ", "", 1).strip()
-            details = []
-            j = i + 1
-            while j < len(lines) and not is_time_line(lines[j]) and not lines[j].startswith(("Lineup ", "Subs ", "Game Plan ")):
-                details.append(lines[j])
-                j += 1
-
-            rows.append({
-                "event_number": len(rows) + 1,
-                "half": half,
-                "clock": None,
-                "team": team,
-                "description": " | ".join(details) if details else line,
-                "score": None,
-                "event_type": "substitution",
-            })
-            i = j
-            continue
-
-        if line.startswith("Game Plan "):
-            body = line.replace("Game Plan ", "", 1).strip()
-            team, description = split_team_from_description(body, known_teams)
-            rows.append({
-                "event_number": len(rows) + 1,
-                "half": half,
-                "clock": None,
-                "team": team,
-                "description": description,
+                "description": desc,
                 "score": None,
                 "event_type": "game_plan",
             })
-            i += 1
+            i += 3
             continue
 
-        event = parse_pbp_event(line, half, known_teams)
-        if event:
-            event["event_number"] = len(rows) + 1
-            rows.append(event)
+        # Timed event is cell-by-cell: time, team, play, score.
+        if re.match(r"^\d{1,2}:\d{2}$", line) and i + 3 < len(lines):
+            clock = lines[i]
+            team = lines[i + 1]
+            desc = lines[i + 2]
+            score = lines[i + 3] if re.match(r"^\d+-\d+$", lines[i + 3]) else None
+            rows.append({
+                "event_number": len(rows) + 1,
+                "half": half,
+                "clock": clock,
+                "team": team,
+                "description": desc,
+                "score": score,
+                "event_type": classify_event(desc),
+            })
+            i += 4 if score else 3
+            continue
 
         i += 1
 

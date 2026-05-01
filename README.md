@@ -51,3 +51,8 @@ Adds reset database button and automatically re-imports blank duplicate games cr
 ## v4 parser/debug fix
 
 Adds robust fetch debugging, better boxscore fallback parsing, and parser count logs.
+
+
+## v5 parser fix
+
+Parses WhatIfSports HTML cell-by-cell instead of assuming full rows are extracted as single text lines.
