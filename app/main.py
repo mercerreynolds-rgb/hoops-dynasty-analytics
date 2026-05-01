@@ -34,6 +34,9 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
 @app.post("/import")
 def import_game(url: str = Form(...), session: Session = Depends(get_session)):
     parsed = parse_game_url(url)
+    print("DEBUG SUMMARY:", parsed.summary_rows)
+    print("DEBUG BOX:", len(parsed.boxscore_rows))
+    print("DEBUG PBP:", len(parsed.pbp_rows))
 
     existing = None
     if parsed.wis_game_id:
