@@ -68,3 +68,13 @@ Adds:
 - true OBPR/DBPR blend for ECSU players only
 
 After deploying v6, reset database and re-import games so the new tables populate.
+
+
+## v7 season stats
+
+Adds:
+- /season dashboard
+- minutes-weighted season player ratings
+- season on/off summaries
+- most-used lineup rankings
+- player detail/game-log pages

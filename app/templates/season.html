@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>{{ my_team }} Season Dashboard — {{ world }}</h2>
+  <p class="muted">{{ games|length }} imported games. Player ratings are minutes-weighted across imported games.</p>
+</div>
+
+<div class="card">
+  <h2>Season Player Ratings</h2>
+  <table>
+    <tr>
+      <th>Player</th><th>GP</th><th>MIN</th><th>MPG</th><th>PPG</th><th>RPG</th><th>APG</th>
+      <th>True OBPR</th><th>True DBPR</th><th>BPR</th>
+      <th>On Net</th><th>Off Net</th><th>Net On/Off</th>
+    </tr>
+    {% for p in player_rows %}
+    <tr>
+      <td><a href="/season/players/{{ p.player }}">{{ p.player }}</a></td>
+      <td>{{ p.gp }}</td>
+      <td>{{ p.minutes }}</td>
+      <td>{{ "%.1f"|format(p.mpg) }}</td>
+      <td>{{ "%.1f"|format(p.ppg) }}</td>
+      <td>{{ "%.1f"|format(p.rpg) }}</td>
+      <td>{{ "%.1f"|format(p.apg) }}</td>
+      <td>{{ "%.2f"|format(p.obpr) }}</td>
+      <td>{{ "%.2f"|format(p.dbpr) }}</td>
+      <td><strong>{{ "%.2f"|format(p.bpr) }}</strong></td>
+      <td>{{ "%.1f"|format(p.net_on) }}</td>
+      <td>{{ "%.1f"|format(p.net_off) }}</td>
+      <td>{{ "%.1f"|format(p.net_onoff) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Most-Used Lineups</h2>
+  <p class="muted">Sorted by possessions. Net = offensive efficiency minus defensive efficiency.</p>
+  <table>
+    <tr>
+      <th>Lineup</th><th>Segments</th><th>PF</th><th>PA</th><th>Poss</th><th>Off Eff</th><th>Def Eff</th><th>Net</th>
+    </tr>
+    {% for l in lineup_rows[:30] %}
+    <tr>
+      <td>{{ l.lineup }}</td>
+      <td>{{ l.segments }}</td>
+      <td>{{ l.pf }}</td>
+      <td>{{ l.pa }}</td>
+      <td>{{ l.poss_for }}</td>
+      <td>{{ "%.1f"|format(l.off_eff) }}</td>
+      <td>{{ "%.1f"|format(l.def_eff) }}</td>
+      <td><strong>{{ "%.1f"|format(l.net_eff) }}</strong></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Imported Games</h2>
+  <table>
+    <tr><th>ID</th><th>Date</th><th>Game</th><th>Score</th></tr>
+    {% for g in games %}
+    <tr>
+      <td>{{ g.id }}</td>
+      <td>{{ g.game_date or "" }}</td>
+      <td><a href="/games/{{ g.id }}">{{ g.away_team }} at {{ g.home_team }}</a></td>
+      <td>{{ g.away_score }} - {{ g.home_score }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
