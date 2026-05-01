@@ -7,6 +7,18 @@ import requests
 from bs4 import BeautifulSoup
 
 
+LAST_FETCH_DEBUG = {
+    "url": "",
+    "final_url": "",
+    "status_code": None,
+    "html_length": 0,
+    "text_preview": "",
+    "contains_final": False,
+    "contains_time_team_play_score": False,
+    "contains_boxscore_title": False,
+}
+
+
 @dataclass
 class ParsedGame:
     source_url: str
@@ -14,17 +26,27 @@ class ParsedGame:
     summary_rows: list[dict]
     boxscore_rows: list[dict]
     pbp_rows: list[dict]
+    debug: dict
 
 
 def fetch_html(url: str) -> str:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 Chrome/122 Safari/537.36"
-        )
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.whatifsports.com/hd/",
     }
-    r = requests.get(url, headers=headers, timeout=30)
+    r = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
     r.raise_for_status()
+
+    LAST_FETCH_DEBUG["url"] = url
+    LAST_FETCH_DEBUG["final_url"] = str(r.url)
+    LAST_FETCH_DEBUG["status_code"] = r.status_code
+    LAST_FETCH_DEBUG["html_length"] = len(r.text)
     return r.text
 
 
@@ -40,6 +62,14 @@ def clean_lines_from_html(html: str) -> list[str]:
         line = re.sub(r"\s+", " ", line.replace("\xa0", " ")).strip()
         if line:
             lines.append(line)
+
+    joined = "\n".join(lines)
+    LAST_FETCH_DEBUG["text_preview"] = joined[:3000]
+    LAST_FETCH_DEBUG["contains_final"] = "Final" in joined
+    LAST_FETCH_DEBUG["contains_time_team_play_score"] = "Time Team Play Score" in joined
+    LAST_FETCH_DEBUG["contains_boxscore_title"] = "Game Boxscore" in joined or "Boxscore" in joined
+    print("FETCH DEBUG:", LAST_FETCH_DEBUG, flush=True)
+
     return lines
 
 
@@ -53,38 +83,31 @@ def split_made_attempt(value: str) -> tuple[int, int]:
     return int(made), int(att)
 
 
+PLAYER_ROW_RE = re.compile(
+    r"^(?P<pos>c|pf|sf|sg|pg)\s*"
+    r"(?P<player>.+?)\s+"
+    r"(?P<min>\d+)\s+"
+    r"(?P<fg>\d+-\d+)\s+"
+    r"(?P<fg3>\d+-\d+)\s+"
+    r"(?P<ft>\d+-\d+)\s+"
+    r"(?P<orb>\d+)\s+"
+    r"(?P<reb>\d+)\s+"
+    r"(?P<ast>\d+)\s+"
+    r"(?P<to>\d+)\s+"
+    r"(?P<stl>\d+)\s+"
+    r"(?P<blk>\d+)\s+"
+    r"(?P<pf>\d+)\s+"
+    r"(?P<pts>\d+)$",
+    flags=re.I,
+)
+
+
 def looks_like_player_stat_line(line: str) -> bool:
-    # WIS text extraction often returns player rows like:
-    #   cGeorge Nicoll 26 5-9 ...
-    # with no space between position and player name.
-    return bool(
-        re.match(
-            r"^(c|pf|sf|sg|pg)\s*.+?\s+\d+\s+\d+-\d+\s+\d+-\d+\s+\d+-\d+\s+",
-            line,
-            flags=re.I,
-        )
-    )
+    return bool(PLAYER_ROW_RE.match(line))
 
 
 def parse_player_stat_line(line: str, team: str, role: str) -> dict:
-    pattern = re.compile(
-        r"^(?P<pos>c|pf|sf|sg|pg)\s*"
-        r"(?P<player>.+?)\s+"
-        r"(?P<min>\d+)\s+"
-        r"(?P<fg>\d+-\d+)\s+"
-        r"(?P<fg3>\d+-\d+)\s+"
-        r"(?P<ft>\d+-\d+)\s+"
-        r"(?P<orb>\d+)\s+"
-        r"(?P<reb>\d+)\s+"
-        r"(?P<ast>\d+)\s+"
-        r"(?P<to>\d+)\s+"
-        r"(?P<stl>\d+)\s+"
-        r"(?P<blk>\d+)\s+"
-        r"(?P<pf>\d+)\s+"
-        r"(?P<pts>\d+)$",
-        flags=re.I,
-    )
-    m = pattern.match(line)
+    m = PLAYER_ROW_RE.match(line)
     if not m:
         raise ValueError(f"Could not parse player stat line: {line}")
 
@@ -96,7 +119,7 @@ def parse_player_stat_line(line: str, team: str, role: str) -> dict:
         "team": team,
         "role": role,
         "pos": m["pos"].lower(),
-        "player": m["player"],
+        "player": m["player"].strip(),
         "minutes": int(m["min"]),
         "fgm": fgm,
         "fga": fga,
@@ -117,19 +140,19 @@ def parse_player_stat_line(line: str, team: str, role: str) -> dict:
 
 def parse_scoreboard(lines: list[str]) -> list[dict]:
     text = "\n".join(lines)
-    date_match = re.search(r"Final -\s*\n?(\d{1,2}/\d{1,2}/\d{4})", text)
+    date_match = re.search(r"Final\s*-\s*\n?(\d{1,2}/\d{1,2}/\d{4})", text)
     date = date_match.group(1) if date_match else None
 
     rows = []
     for line in lines:
         m = re.match(
-            r"^(#\d+\s+)?(?P<team>.+?)\s+(?P<h1>\d+)\s+(?P<h2>\d+)\s+(?P<final>\d+)$",
+            r"^(#\d+\s+)?(?P<team>[A-Za-z0-9\.\s&'\-]+?)\s+(?P<h1>\d+)\s+(?P<h2>\d+)\s+(?P<final>\d+)$",
             line,
         )
         if not m:
             continue
         team = m.group("team").strip()
-        if len(team) > 2 and not team.isdigit():
+        if team and not team.isdigit() and team.lower() not in {"time team play score"}:
             rows.append(
                 {
                     "date": date,
@@ -148,7 +171,8 @@ def parse_boxscore(lines: list[str]) -> list[dict]:
     current_team = None
     current_role = None
 
-    for line in lines:
+    for i, line in enumerate(lines):
+        # Team headers can appear as "E. Connecticut St. (22-6, 15-1)".
         team_header = re.match(r"^(.+?)\s+\(\d+-\d+,\s*\d+-\d+\)$", line)
         if team_header:
             current_team = team_header.group(1).strip()
@@ -168,6 +192,27 @@ def parse_boxscore(lines: list[str]) -> list[dict]:
 
         if line.startswith("Totals "):
             current_role = None
+
+    # Fallback: infer teams from scoreboard if header matching failed.
+    if not rows:
+        summary = parse_scoreboard(lines)
+        teams = [r["team"] for r in summary]
+        team_idx = 0
+        role = None
+        for line in lines:
+            if line.strip().startswith("STARTERS"):
+                role = "starter"
+                continue
+            if line.strip().startswith("BENCH"):
+                role = "bench"
+                continue
+            if line.startswith("Totals "):
+                if team_idx < 1:
+                    team_idx += 1
+                role = None
+                continue
+            if role and team_idx < len(teams) and looks_like_player_stat_line(line):
+                rows.append(parse_player_stat_line(line, teams[team_idx], role))
 
     return rows
 
@@ -273,7 +318,6 @@ def parse_play_by_play(lines: list[str], known_teams: list[str]) -> list[dict]:
             i += 1
             continue
 
-        # Capture lineup headers and the following five player lines.
         if line.startswith("Lineup "):
             team = line.replace("Lineup ", "", 1).strip()
             details = []
@@ -295,7 +339,6 @@ def parse_play_by_play(lines: list[str], known_teams: list[str]) -> list[dict]:
             i = j
             continue
 
-        # Capture substitution blocks and the following in/out player lines.
         if line.startswith("Subs "):
             team = line.replace("Subs ", "", 1).strip()
             details = []
@@ -316,7 +359,6 @@ def parse_play_by_play(lines: list[str], known_teams: list[str]) -> list[dict]:
             i = j
             continue
 
-        # Capture game plans too, useful for later model context.
         if line.startswith("Game Plan "):
             body = line.replace("Game Plan ", "", 1).strip()
             team, description = split_team_from_description(body, known_teams)
@@ -349,7 +391,11 @@ def parse_game_url(url: str) -> ParsedGame:
     summary = parse_scoreboard(lines)
     teams = [r["team"] for r in summary]
     boxscore = parse_boxscore(lines)
+    if not teams:
+        teams = sorted(set(row["team"] for row in boxscore))
     pbp = parse_play_by_play(lines, teams)
+
+    print("PARSE COUNTS:", {"summary": len(summary), "box": len(boxscore), "pbp": len(pbp)}, flush=True)
 
     return ParsedGame(
         source_url=url,
@@ -357,4 +403,5 @@ def parse_game_url(url: str) -> ParsedGame:
         summary_rows=summary,
         boxscore_rows=boxscore,
         pbp_rows=pbp,
+        debug=dict(LAST_FETCH_DEBUG),
     )

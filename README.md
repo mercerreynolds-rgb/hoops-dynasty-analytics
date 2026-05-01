@@ -46,3 +46,8 @@ Handles WhatIfSports player rows where position and player name are joined, e.g.
 ## v3 fix
 
 Adds reset database button and automatically re-imports blank duplicate games created by older parser versions.
+
+
+## v4 parser/debug fix
+
+Adds robust fetch debugging, better boxscore fallback parsing, and parser count logs.

@@ -8,6 +8,13 @@
 <p class="muted">Rows shown below: {{ stats|length }} player stat rows, {{ events|length }} play-by-play preview rows.</p>
 </div>
 
+{% if stats|length == 0 %}
+<div class="card">
+  <h2>No player rows found</h2>
+  <p class="muted">Check Render logs for FETCH DEBUG and DEBUG FETCH PREVIEW. If the preview does not include "Final" and "Time Team Play Score", WhatIfSports is returning a different page to Render.</p>
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Player Ratings</h2>
   <table>
