@@ -6,9 +6,11 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select, delete
 
 from app.database import get_session, init_db
-from app.models import Game, PlayerGameStat, PlayByPlayEvent
+from app.models import Game, PlayerGameStat, PlayByPlayEvent, LineupSegment, PlayerImpact
 from app.parser import parse_game_url
 from app.ratings import calculate_box_ratings
+from app.impact import calculate_game_impacts
+from app.config import MY_TEAM, WORLD
 
 app = FastAPI(title="Hoops Dynasty Analytics")
 templates = Jinja2Templates(directory="app/templates")
@@ -23,11 +25,11 @@ def on_startup():
 def dashboard(request: Request, session: Session = Depends(get_session)):
     games = session.exec(select(Game).order_by(Game.id.desc())).all()
     top_players = session.exec(
-        select(PlayerGameStat).order_by(PlayerGameStat.bpr.desc()).limit(20)
+        select(PlayerGameStat).where(PlayerGameStat.team == MY_TEAM).order_by(PlayerGameStat.bpr.desc()).limit(20)
     ).all()
     return templates.TemplateResponse(
         "dashboard.html",
-        {"request": request, "games": games, "top_players": top_players},
+        {"request": request, "games": games, "top_players": top_players, "my_team": MY_TEAM, "world": WORLD},
     )
 
 
@@ -85,6 +87,37 @@ def import_game(url: str = Form(...), session: Session = Depends(get_session)):
         session.add(event)
 
     session.commit()
+
+    # Build true ECSU on/off impact after raw stats/events are saved.
+    stats = session.exec(
+        select(PlayerGameStat).where(PlayerGameStat.game_id == game.id)
+    ).all()
+    events = session.exec(
+        select(PlayByPlayEvent)
+        .where(PlayByPlayEvent.game_id == game.id)
+        .order_by(PlayByPlayEvent.event_number)
+    ).all()
+    teams = [t for t in [game.away_team, game.home_team] if t]
+    segments, impacts = calculate_game_impacts(game.id, stats, events, teams)
+
+    for seg in segments:
+        session.add(LineupSegment(**seg))
+
+    impact_by_player = {}
+    for imp in impacts:
+        impact_by_player[imp["player"]] = imp
+        session.add(PlayerImpact(**imp))
+
+    # Blend box ratings with lineup impact for MY_TEAM only.
+    for stat in stats:
+        if stat.team == MY_TEAM and stat.player in impact_by_player:
+            imp = impact_by_player[stat.player]
+            stat.obpr = round(stat.box_obpr + imp["off_impact"], 3)
+            stat.dbpr = round(stat.box_dbpr + imp["def_impact"], 3)
+            stat.bpr = round(stat.obpr + stat.dbpr, 3)
+            session.add(stat)
+
+    session.commit()
     return RedirectResponse(f"/games/{game.id}", status_code=303)
 
 
@@ -96,7 +129,18 @@ def game_detail(
     stats = session.exec(
         select(PlayerGameStat)
         .where(PlayerGameStat.game_id == game_id)
+        .where(PlayerGameStat.team == MY_TEAM)
         .order_by(PlayerGameStat.bpr.desc())
+    ).all()
+    impacts = session.exec(
+        select(PlayerImpact)
+        .where(PlayerImpact.game_id == game_id)
+        .order_by(PlayerImpact.off_impact.desc())
+    ).all()
+    segments = session.exec(
+        select(LineupSegment)
+        .where(LineupSegment.game_id == game_id)
+        .order_by(LineupSegment.segment_number)
     ).all()
     events = session.exec(
         select(PlayByPlayEvent)
@@ -105,13 +149,15 @@ def game_detail(
     ).all()
     return templates.TemplateResponse(
         "game_detail.html",
-        {"request": request, "game": game, "stats": stats, "events": events[:200]},
+        {"request": request, "game": game, "stats": stats, "events": events[:200], "impacts": impacts, "segments": segments, "my_team": MY_TEAM},
     )
 
 
 
 @app.post("/admin/reset")
 def reset_database(session: Session = Depends(get_session)):
+    session.exec(delete(PlayerImpact))
+    session.exec(delete(LineupSegment))
     session.exec(delete(PlayerGameStat))
     session.exec(delete(PlayByPlayEvent))
     session.exec(delete(Game))
@@ -121,7 +167,7 @@ def reset_database(session: Session = Depends(get_session)):
 
 @app.get("/players", response_class=HTMLResponse)
 def players(request: Request, session: Session = Depends(get_session)):
-    rows = session.exec(select(PlayerGameStat).order_by(PlayerGameStat.bpr.desc())).all()
+    rows = session.exec(select(PlayerGameStat).where(PlayerGameStat.team == MY_TEAM).order_by(PlayerGameStat.bpr.desc())).all()
     return templates.TemplateResponse(
         "players.html",
         {"request": request, "rows": rows},

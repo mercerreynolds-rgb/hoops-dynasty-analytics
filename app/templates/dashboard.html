@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="card">
-  <h2>Import Game</h2>
+  <h2>{{ my_team }} Analytics — {{ world }}</h2>
   <p class="muted">Paste a WhatIfSports Hoops Dynasty box score URL.</p>
   <form method="post" action="/import">
     <input type="text" name="url" placeholder="https://www.whatifsports.com/hd/GameResults/BoxScore.aspx?gid=..." required>
@@ -38,7 +38,7 @@
 </div>
 
 <div class="card">
-  <h2>Top Single-Game BPR</h2>
+  <h2>{{ my_team }} Top Single-Game True BPR</h2>
   {% if top_players %}
   <table>
     <tr><th>Player</th><th>Team</th><th>MIN</th><th>PTS</th><th>OBPR</th><th>DBPR</th><th>BPR</th></tr>

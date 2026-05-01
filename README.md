@@ -56,3 +56,15 @@ Adds robust fetch debugging, better boxscore fallback parsing, and parser count 
 ## v5 parser fix
 
 Parses WhatIfSports HTML cell-by-cell instead of assuming full rows are extracted as single text lines.
+
+
+## v6 ECSU true BPR
+
+Adds:
+- MY_TEAM config for E. Connecticut St. in Phelan
+- lineup segment table
+- possession/on-off engine
+- PlayerImpact table
+- true OBPR/DBPR blend for ECSU players only
+
+After deploying v6, reset database and re-import games so the new tables populate.

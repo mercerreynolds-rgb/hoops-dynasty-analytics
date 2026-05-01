@@ -56,3 +56,41 @@ class PlayByPlayEvent(SQLModel, table=True):
     description: str
     score: Optional[str] = None
     event_type: str = "other"
+class LineupSegment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    game_id: int = Field(index=True)
+    segment_number: int
+    half: Optional[str] = None
+    start_clock: Optional[str] = None
+    end_clock: Optional[str] = None
+    team: str
+    lineup: str
+    points_for: int = 0
+    points_against: int = 0
+    possessions_for: int = 0
+    possessions_against: int = 0
+
+
+class PlayerImpact(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    game_id: int = Field(index=True)
+    player: str
+    team: str
+
+    on_possessions_for: int = 0
+    on_points_for: int = 0
+    on_possessions_against: int = 0
+    on_points_against: int = 0
+
+    off_possessions_for: int = 0
+    off_points_for: int = 0
+    off_possessions_against: int = 0
+    off_points_against: int = 0
+
+    on_off_eff: float = 0.0
+    off_off_eff: float = 0.0
+    on_def_eff: float = 0.0
+    off_def_eff: float = 0.0
+
+    off_impact: float = 0.0
+    def_impact: float = 0.0
