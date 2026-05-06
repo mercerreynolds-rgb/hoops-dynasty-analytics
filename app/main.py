@@ -1254,11 +1254,10 @@ def build_potential_summary(rows):
 
         expected_growth = adjusted_expected_growth(color, start_val, start_we, key)
 
-        if key == "work_ethic":
-            # WE has no color cap. Do not clamp expected peak to 100 here.
-            expected_peak = round(start_val + expected_growth, 1)
-        else:
-            expected_peak = min(100, round(start_val + expected_growth, 1))
+        # All visible ratings cap at 100, including WE.
+        # WE is special only because it is not governed by color-growth caps;
+        # its projected growth is playing-time/WE-rule based, then capped at 100.
+        expected_peak = min(100, round(start_val + expected_growth, 1))
 
         remaining = max(0, expected_peak - current_val)
         outlier_flag = color == "green" and key in {"perimeter", "low_post"} and start_we >= 55
@@ -1300,9 +1299,10 @@ def build_potential_summary(rows):
         })
     role_scores.sort(key=lambda r: r["projected_score"], reverse=True)
 
+    # WIS OVR is effectively the sum/index of non-FT ratings in this project.
+    # Do not multiply average remaining growth; add total remaining non-FT growth.
     included_count = sum(1 for r in rating_rows if r.get("include_in_total"))
-    avg_remaining = remaining_total / included_count if included_count else 0
-    projected_ovr = min(1000, round((current.overall or 0) + avg_remaining * 10, 1))
+    projected_ovr = min(1000, round((current.overall or 0) + remaining_total, 1))
 
     return {
         "summary": summary, "current": current, "start": start,

@@ -247,3 +247,20 @@ FT remains imported, displayed, and projected, but is excluded from:
 - projected total
 - remaining growth total
 - projected OVR index / total player rating style calculations
+
+
+## v37 actual color + projection fix
+
+Fixes:
+- color extraction now reads potential_* classes from td and nested elements
+- adds HTML row fallback to capture colors even if header matching fails
+- Projected OVR now equals current OVR + total remaining non-FT growth
+- removes bad avg_remaining * 10 projection inflation
+
+
+## v38 cap all projected ratings at 100
+
+Updates True Potential Engine:
+- every projected rating is capped at 100
+- WE remains special: always black and not color-growth-capped
+- but WE projected value still cannot exceed 100

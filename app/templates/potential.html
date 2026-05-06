@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
   <h2>True Potential Engine</h2>
-  <p class="muted">Uses lowest-season Season Start as baseline. Rules: green +30, blue +20, black +10, yellow +5, red +0. WE is special: always black, no color cap, currently projected at about +20 average growth. Blank non-WE colors are inferred from observed growth. FT is tracked but excluded from total/player-rating projection calculations.</p>
+  <p class="muted">Uses lowest-season Season Start as baseline. Rules: green +30, blue +20, black +10, yellow +5, red +0. WE is special: always black and not color-capped, currently projected at about +20 average growth, but still capped at 100. Blank non-WE colors are inferred from observed growth. FT is tracked but excluded from total/player-rating projection calculations.</p>
   <form method="get" action="/potential">
     <select name="team">
       <option value="" {% if not team %}selected{% endif %}>All teams</option>
@@ -19,7 +19,7 @@
   {% if rows %}
   <table>
     <tr>
-      <th>Player</th><th>Team</th><th>Current OVR</th><th>Projected OVR Index</th><th>Remaining Growth</th><th>Best Projected Role</th><th>Projected Role Score</th><th>Role Gain</th><th>Baseline</th><th>Color Source</th><th>Outlier</th>
+      <th>Player</th><th>Team</th><th>Current OVR</th><th>Projected OVR</th><th>Remaining Growth</th><th>Best Projected Role</th><th>Projected Role Score</th><th>Role Gain</th><th>Baseline</th><th>Color Source</th><th>Outlier</th>
     </tr>
     {% for r in rows %}
     <tr>

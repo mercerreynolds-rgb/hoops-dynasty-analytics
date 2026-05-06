@@ -6,7 +6,7 @@
   {% if potential %}
   <p>
     <span class="pill">Current OVR {{ potential.current.overall }}</span>
-    <span class="pill">Projected OVR Index {{ "%.1f"|format(potential.projected_ovr) }}</span>
+    <span class="pill">Projected OVR {{ "%.1f"|format(potential.projected_ovr) }}</span>
     <span class="pill">Remaining Growth {{ "%.1f"|format(potential.remaining_total) }}</span>
     <span class="pill">Baseline {{ potential.baseline_note }}</span>
   </p>
@@ -19,7 +19,7 @@
 {% if potential %}
 <div class="card">
   <h2>Rating Projection</h2>
-  <p class="muted">WE is modeled separately: always black, no color cap, currently projected at about +20 average growth until archive data refines it. FT is displayed but excluded from total/player-rating projection calculations.</p>
+  <p class="muted">WE is modeled separately: always black and not color-capped, currently projected at about +20 average growth until archive data refines it, but still capped at 100. FT is displayed but excluded from total/player-rating projection calculations.</p>
   <table>
     <tr><th>Rating</th><th>Start</th><th>Current</th><th>Growth</th><th>Color</th><th>Color Source</th><th>Expected Growth</th><th>Expected Peak</th><th>Remaining</th><th>Included?</th><th>Flag</th></tr>
     {% for r in potential.rating_rows %}

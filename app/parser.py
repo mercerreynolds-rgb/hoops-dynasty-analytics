@@ -724,6 +724,21 @@ def parse_ratings_history_url(url: str) -> dict:
         if rows:
             break
 
+    # HTML row fallback: find rows whose first two cells look like Season + Type.
+    # This captures actual potential_* classes even if the header matching failed.
+    if not rows:
+        for tr in soup.find_all("tr"):
+            cells = tr.find_all(["td", "th"])
+            texts = [" ".join(c.get_text(" ", strip=True).split()) for c in cells]
+            if len(texts) < 16:
+                continue
+            if not re.match(r"^\d+$", texts[0]):
+                continue
+            if texts[1] not in {"Current", "Season Start", "Season End", "Recruiting", "Signed"}:
+                continue
+            color_vals = [normalize_rating_color(c) for c in cells[2:15]]
+            add_row(texts[:16], color_vals)
+
     # Cell-by-cell text fallback.
     if not rows and header_idx is not None:
         i = header_idx
@@ -766,43 +781,65 @@ def parse_ratings_history_url(url: str) -> dict:
 
 def normalize_rating_color(cell) -> str:
     """
-    Best-effort color extraction from WIS rating cells.
+    Extract WIS potential color from a rating cell.
 
-    WIS may expose potential/color through class names, inline style colors, or
-    small span wrappers. We normalize common signals to green/blue/black/yellow/red.
+    WIS uses classes like:
+      potential_veryhigh -> green
+      potential_high -> blue
+      potential_average -> black
+      potential_low -> yellow
+      potential_verylow -> red
+
+    The class can be on the td itself or on a nested span/font.
     """
     if cell is None:
         return ""
 
-    raw = " ".join([
-        " ".join(cell.get("class", [])) if hasattr(cell, "get") else "",
-        cell.get("style", "") if hasattr(cell, "get") else "",
-        str(cell),
-    ]).lower()
+    chunks = []
 
-    # WIS potential classes:
-    # potential_veryhigh = green
-    # potential_high = blue
-    # potential_average = black
-    # potential_low = yellow
-    # potential_verylow = red
+    def collect(node):
+        if not hasattr(node, "attrs"):
+            return
+        for key, value in node.attrs.items():
+            if isinstance(value, list):
+                chunks.extend(str(v) for v in value)
+            else:
+                chunks.append(str(value))
+
+    collect(cell)
+    for nested in cell.find_all(True):
+        collect(nested)
+
+    raw = " ".join(chunks).lower()
+
+    # Important: check verylow before low, veryhigh before high.
     if "potential_veryhigh" in raw:
         return "green"
+    if "potential_verylow" in raw:
+        return "red"
     if "potential_high" in raw:
         return "blue"
     if "potential_average" in raw:
         return "black"
-    if "potential_verylow" in raw:
-        return "red"
     if "potential_low" in raw:
         return "yellow"
 
-    # Prefer explicit words/classes.
+    # Generic fallback.
+    if "veryhigh" in raw:
+        return "green"
+    if "verylow" in raw:
+        return "red"
+    if "high" in raw:
+        return "blue"
+    if "average" in raw:
+        return "black"
+    if "low" in raw:
+        return "yellow"
+
     for color in ["green", "blue", "yellow", "red", "black"]:
         if color in raw:
             return color
 
-    # Common hex/rgb guesses.
     if "#008000" in raw or "0,128,0" in raw or "#00ff00" in raw:
         return "green"
     if "#0000ff" in raw or "0,0,255" in raw:
@@ -815,24 +852,6 @@ def normalize_rating_color(cell) -> str:
         return "black"
 
     return ""
-
-
-RATING_COLOR_FIELDS = [
-    "athleticism_color",
-    "speed_color",
-    "rebounding_color",
-    "defense_color",
-    "shot_blocking_color",
-    "low_post_color",
-    "perimeter_color",
-    "ball_handling_color",
-    "passing_color",
-    "work_ethic_color",
-    "stamina_color",
-    "durability_color",
-    "free_throw_color",
-]
-
 
 
 def parse_team_ratings_url(url: str) -> dict:
