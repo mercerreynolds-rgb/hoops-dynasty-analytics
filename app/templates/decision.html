@@ -6,7 +6,7 @@
   <p><a href="/players?team={{ team|urlencode }}&world={{ world|urlencode }}">Game Ratings →</a></p>
   <p class="muted">
     This connects player ratings to actual production. Expected BPR is a first-pass estimate from the player’s best ratings-based role score.
-    Impact Gap = Actual BPR - Expected BPR. By default this uses only games against non-Sim AI opponents.
+    Impact Gap = Actual BPR - Expected BPR. Use the filter to compare human-coached games only or all games.
   </p>
 
   <form method="get" action="/decision">
@@ -17,7 +17,11 @@
     </select>
     
     <label style="margin-left:12px;">
-      <input type="checkbox" name="human_only" value="true" {% if human_only %}checked{% endif %}> Human-coached opponents only
+      Game filter:
+      <select name="filter_mode">
+        <option value="human" {% if filter_mode == "human" %}selected{% endif %}>Human coaches only</option>
+        <option value="all" {% if filter_mode == "all" %}selected{% endif %}>All games</option>
+      </select>
     </label>
     <button type="submit">Switch Team</button>
   </form>
@@ -27,7 +31,12 @@
     <span class="pill">Underperformers: {{ under_count }}</span>
     <span class="pill">Missing ratings: {{ missing_count }}</span>
     {% if human_only %}<span class="pill">Filter: Human Coaches Only</span>{% else %}<span class="pill">Filter: All Games</span>{% endif %}
+    <span class="pill">Human games: {{ human_games_count }}</span>
+    <span class="pill">All games: {{ all_games_count }}</span>
   </p>
+  {% if fallback_to_all %}
+  <p class="muted"><strong>No human-coached games yet for this team.</strong> Showing all games instead.</p>
+  {% endif %}
 </div>
 
 <div class="card">

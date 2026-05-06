@@ -186,3 +186,12 @@ Fixes ECSU-only leftovers:
 - Game Ratings page has team selector
 - Decision Engine normalizes world from selected team
 - Season page links to correct team Game Ratings
+
+
+## v29 decision filter fix
+
+Fixes Decision Engine game filter:
+- replaces checkbox with explicit dropdown: Human coaches only / All games
+- unchecked checkbox issue removed
+- auto-falls back to All games when selected team has zero human-coached games
+- shows human-game and all-game counts
