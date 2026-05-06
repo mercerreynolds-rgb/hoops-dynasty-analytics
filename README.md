@@ -106,3 +106,9 @@ Default behavior:
 - Human-coached opponents only
 
 Toggle available on /decision page.
+
+
+## v22 decision engine error fix
+
+Fixes internal server error on /decision caused by referencing non-existent Game fields.
+Human-only filtering now uses away_team/home_team and away_coach/home_coach correctly.

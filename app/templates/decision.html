@@ -31,6 +31,7 @@
 
 <div class="card">
   <h2>Ratings vs Production</h2>
+  {% if rows %}
   <table>
     <tr>
       <th>Player</th>
@@ -63,6 +64,9 @@
     </tr>
     {% endfor %}
   </table>
+  {% else %}
+  <p class="muted">No matching player/game rows found for this filter. Try unchecking Human-coached opponents only, or confirm opponent coach names are populated in Diagnostics.</p>
+  {% endif %}
 </div>
 
 <div class="card">

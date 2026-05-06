@@ -752,10 +752,17 @@ def build_decision_engine_rows(session: Session, team: str, human_only: bool = F
     impacts = session.exec(select(PlayerImpact).where(PlayerImpact.team == team)).all()
 
     if human_only:
-        human_game_ids = {
-            g.id for g in session.exec(select(Game)).all()
-            if g.team == team and g.opponent_coach and g.opponent_coach != "Sim AI"
-        }
+        human_game_ids = set()
+        for g in session.exec(select(Game)).all():
+            if g.away_team == team:
+                opp_coach = (g.home_coach or "").strip()
+                if opp_coach and opp_coach != "Sim AI":
+                    human_game_ids.add(g.id)
+            elif g.home_team == team:
+                opp_coach = (g.away_coach or "").strip()
+                if opp_coach and opp_coach != "Sim AI":
+                    human_game_ids.add(g.id)
+
         stats = [s for s in stats if s.game_id in human_game_ids]
         impacts = [i for i in impacts if i.game_id in human_game_ids]
 
