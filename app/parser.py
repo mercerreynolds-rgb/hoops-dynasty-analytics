@@ -588,7 +588,11 @@ def _to_int(value: str) -> int:
 def parse_ratings_history_url(url: str) -> dict:
     """
     Hard-anchored, color-aware parser for WIS HD RatingsHistory.aspx.
+
+    Uses PlayerHistory endpoint because it reliably exposes potential_* classes.
     """
+    original_url = url
+    url = normalize_ratings_history_url(url)
     html = fetch_html(url)
     lines = clean_lines_from_html(html)
     soup = BeautifulSoup(html, "lxml")
@@ -769,6 +773,7 @@ def parse_ratings_history_url(url: str) -> dict:
 
     print("RATINGS PARSER DEBUG:", {
         "url": url,
+        "original_url": original_url if "original_url" in locals() else url,
         "player_id": player_id,
         "tid": tid,
         "player": player,
@@ -933,6 +938,18 @@ def apply_detected_colors_to_rating_rows(rows: list[dict], html: str) -> list[di
     return rows
 
 
+
+def normalize_ratings_history_url(url: str) -> str:
+    """
+    WIS exposes ratings history through more than one URL shape.
+    The PlayerHistory endpoint is the one that reliably exposes potential_* CSS classes.
+    """
+    pid_match = re.search(r"[?&]pid=(\d+)", url)
+    if not pid_match:
+        return url
+    pid = pid_match.group(1)
+    return f"https://www.whatifsports.com/hd/PlayerHistory/RatingsHistory.aspx?pid={pid}"
+
 def parse_team_ratings_url(url: str) -> dict:
     """
     Parse a TeamProfile/Ratings.aspx page and find each player's RatingsHistory URL.
@@ -961,7 +978,7 @@ def parse_team_ratings_url(url: str) -> dict:
             "player": name or pid,
             "player_id": pid,
             "tid": tid,
-            "ratings_history_url": f"https://www.whatifsports.com/hd/PlayerProfile/RatingsHistory.aspx?tid={tid}&pid={pid}",
+            "ratings_history_url": f"https://www.whatifsports.com/hd/PlayerHistory/RatingsHistory.aspx?pid={pid}",
             "profile_url": f"https://www.whatifsports.com/hd/PlayerProfile/Default.aspx?tid={tid}&pid={pid}",
         }
 

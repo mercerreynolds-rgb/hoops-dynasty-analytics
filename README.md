@@ -275,3 +275,14 @@ The parser now:
 - extracts potential_* classes directly from row cells
 - maps them back onto parsed Season/Type snapshots
 - logs detected_color_cells in RATINGS PARSER DEBUG
+
+
+## v40 PlayerHistory color endpoint fix
+
+Fixes actual potential color capture by switching RatingsHistory imports from:
+- /hd/PlayerProfile/RatingsHistory.aspx
+
+to:
+- /hd/PlayerHistory/RatingsHistory.aspx
+
+The PlayerHistory endpoint is the one visible in Chrome screenshots and reliably exposes potential_* CSS classes.
