@@ -73,3 +73,11 @@ Fixes ratings import by:
 - parsing cell-by-cell rows from that header only
 - detecting player name from class/height/title instead of nav tabs
 - logging first parsed row in Render logs
+
+
+## v19 rating growth baseline fix
+
+Fixes ratings/OVR growth baseline:
+- previous behavior could use the first/oldest row, often `Season End`
+- new behavior uses the `Season Start` row from the lowest numbered season
+- fallback order: Recruiting/Signed, then earliest row in lowest season

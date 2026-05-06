@@ -642,10 +642,41 @@ def build_rating_summary(rows):
     if not rows:
         return None
 
-    # Rows are usually reverse chronological. Current is preferred.
-    current = next((r for r in rows if r.snapshot_type == "Current"), rows[0])
-    start = rows[-1]
-    season_start = next((r for r in reversed(rows) if r.snapshot_type in {"Season Start", "Recruiting", "Signed"}), start)
+    def season_int(row):
+        try:
+            return int(row.season or 0)
+        except Exception:
+            return 0
+
+    # Current row: explicitly Current if available, otherwise newest season/highest id row.
+    current = next((r for r in rows if r.snapshot_type == "Current"), None)
+    if current is None:
+        current = sorted(rows, key=lambda r: (season_int(r), r.id or 0), reverse=True)[0]
+
+    # Correct baseline:
+    # lowest numbered season + "Season Start"
+    # NOT "Season End" from that same season.
+    positive_seasons = [season_int(r) for r in rows if season_int(r) > 0]
+    min_season = min(positive_seasons) if positive_seasons else season_int(current)
+    min_season_rows = [r for r in rows if season_int(r) == min_season]
+
+    start = next((r for r in min_season_rows if r.snapshot_type == "Season Start"), None)
+
+    # Fall back to Recruiting/Signed if available for that same lowest season.
+    if start is None:
+        start = next((r for r in min_season_rows if r.snapshot_type in {"Recruiting", "Signed"}), None)
+
+    # Last fallback: earliest row in the lowest season.
+    if start is None and min_season_rows:
+        start = sorted(min_season_rows, key=lambda r: r.id or 0)[0]
+
+    # Absolute fallback.
+    if start is None:
+        start = rows[-1]
+
+    current_season = season_int(current)
+    current_season_rows = [r for r in rows if season_int(r) == current_season]
+    season_start = next((r for r in current_season_rows if r.snapshot_type == "Season Start"), start)
 
     growth = {}
     for key in RATING_KEYS + ["overall"]:
@@ -666,6 +697,7 @@ def build_rating_summary(rows):
         "growth": growth,
         "role_scores": role_scores,
         "best_role": role_scores[0] if role_scores else None,
+        "baseline_note": f"{start.season} {start.snapshot_type}",
     }
 
 

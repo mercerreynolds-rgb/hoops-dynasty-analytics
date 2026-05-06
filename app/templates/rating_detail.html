@@ -8,6 +8,7 @@
   <p>
     <span class="pill">Current OVR {{ summary.current.overall }}</span>
     <span class="pill">OVR Growth {{ summary.growth.overall }}</span>
+    <span class="pill">Baseline: {{ summary.baseline_note }}</span>
     <span class="pill">Best Role: {{ summary.best_role.role }} {{ "%.1f"|format(summary.best_role.score) }}</span>
   </p>
   {% endif %}
@@ -28,7 +29,7 @@
 </div>
 
 <div class="card">
-  <h2>Growth: First Snapshot → Current</h2>
+  <h2>Growth: First Season Start → Current</h2>
   <table>
     <tr><th>Rating</th><th>Start</th><th>Current</th><th>Growth</th></tr>
     <tr><td>A</td><td>{{ summary.start.athleticism }}</td><td>{{ summary.current.athleticism }}</td><td>{{ summary.growth.athleticism }}</td></tr>
