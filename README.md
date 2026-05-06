@@ -1,0 +1,125 @@
+# Hoops Dynasty Analytics v11
+
+Adds bulk import from a WhatIfSports Team Game Log page and multi-team support.
+
+Tracked teams:
+- E. Connecticut St. — Phelan
+- CSU, Eastbay — Tarkanian
+- Redlands — Knight
+
+## Deploy notes
+
+After deploying v11:
+1. Reset database.
+2. Paste a Game Log URL into Bulk Import.
+3. Go to Diagnostics.
+4. Go to Season and choose a tracked team.
+
+Game Log URL format:
+https://www.whatifsports.com/hd/TeamProfile/GameLog.aspx?tid=14473
+
+
+## v12 player detail fix
+
+Fixes internal server error on individual player pages by replacing the player detail template with a multi-team safe version and URL-encoding player links.
+
+
+## v13 advanced metrics
+
+Adds to season/player pages:
+- Usage %
+- True Shooting %
+- On-court ORtg / DRtg / Net Rating
+- Net On/Off
+- Simple player role tags
+
+
+## v14 ratings history
+
+Adds:
+- RatingsHistory.aspx importer
+- Player rating snapshots table
+- Growth from first snapshot to current
+- Role scores from ratings
+- Ratings dashboard and player rating detail pages
+
+Color/potential projection is not yet automated because the RatingsHistory page gives historical values, not original color tags. That can be added next with manual color input.
+
+
+## v15 Redlands/Knight boxscore parser fix
+
+Adds hybrid box-score parsing:
+- compact player rows: `c Norman Brown 18 4-10 ...`
+- cell-by-cell player rows used by some other pages
+
+This fixes Redlands games importing a shell but zero stat rows.
+
+
+## v16 ratings import fix
+
+Adds robust RatingsHistory parsing for both cell-by-cell and compact table output.
+Also logs RATINGS PARSER DEBUG and RATINGS IMPORT RESULT in Render logs.
+
+
+## v17 RatingsHistory Sn. header fix
+
+Fixes Redlands/Knight ratings history pages where the ratings table header uses `Sn.` instead of `Season`.
+
+
+## v18 RatingsHistory hard-anchor parser
+
+Fixes ratings import by:
+- anchoring directly on the Sn./Type/A/SPD/.../OVR table header
+- parsing cell-by-cell rows from that header only
+- detecting player name from class/height/title instead of nav tabs
+- logging first parsed row in Render logs
+
+
+## v19 rating growth baseline fix
+
+Fixes ratings/OVR growth baseline:
+- previous behavior could use the first/oldest row, often `Season End`
+- new behavior uses the `Season Start` row from the lowest numbered season
+- fallback order: Recruiting/Signed, then earliest row in lowest season
+
+
+## v20 decision engine
+
+Adds:
+- /decision dashboard
+- Connects ratings history to season BPR by player name
+- Expected BPR from best role score
+- Impact Gap = Actual BPR - Expected BPR
+- Labels: Overperformer / Underperformer / As Expected / Import ratings
+
+Current Expected BPR formula:
+  (Best Role Score - 50) / 4
+
+This is transparent and should later be replaced by a learned regression once enough player-season data exists.
+
+
+## v21 human-only decision engine filter
+
+Decision Engine now supports filtering to only games against non-Sim AI opponents.
+
+Default behavior:
+- Human-coached opponents only
+
+Toggle available on /decision page.
+
+
+## v22 decision engine error fix
+
+Fixes internal server error on /decision caused by referencing non-existent Game fields.
+Human-only filtering now uses away_team/home_team and away_coach/home_coach correctly.
+
+
+## v23 password protection
+
+Adds Basic Auth protection to the entire app.
+
+Required Render environment variables:
+- APP_USERNAME
+- APP_PASSWORD
+
+If either variable is missing, the app denies access.
