@@ -467,6 +467,77 @@ def import_game(url: str = Form(...), session: Session = Depends(get_session)):
 
 
 
+
+
+def import_ratings_history_url(url: str, session: Session, player_name: str = "", team: str = "") -> dict:
+    parsed = parse_ratings_history_url(url)
+    name = player_name.strip() or parsed.get("player") or parsed.get("player_id") or "Unknown Player"
+    team_name = team.strip() or parsed.get("team") or ""
+
+    if parsed.get("player_id"):
+        existing = session.exec(
+            select(PlayerRatingSnapshot).where(PlayerRatingSnapshot.player_id == parsed["player_id"])
+        ).all()
+        for row in existing:
+            session.delete(row)
+        session.commit()
+
+    imported = 0
+    for row in parsed["rows"]:
+        snap = PlayerRatingSnapshot(
+            source_url=url,
+            player_id=parsed.get("player_id"),
+            tid=parsed.get("tid"),
+            player=name,
+            team=team_name,
+            **row,
+        )
+        session.add(snap)
+        imported += 1
+
+    session.commit()
+
+    return {
+        "url": url,
+        "player": name,
+        "player_id": parsed.get("player_id"),
+        "rows": imported,
+    }
+
+
+def sync_team_ratings_url(ratings_url: str, team: str, session: Session) -> dict:
+    parsed = parse_team_ratings_url(ratings_url)
+
+    imported_players = 0
+    imported_rows = 0
+    errors = 0
+
+    for player in parsed["players"]:
+        try:
+            result = import_ratings_history_url(
+                player["ratings_history_url"],
+                session,
+                player_name=player.get("player") or "",
+                team=team,
+            )
+
+            if result["rows"] > 0:
+                imported_players += 1
+                imported_rows += result["rows"]
+
+        except Exception as exc:
+            errors += 1
+            print("RATINGS SYNC ERROR:", player, exc, flush=True)
+
+    return {
+        "source": ratings_url,
+        "players_found": len(parsed["players"]),
+        "imported_players": imported_players,
+        "imported_rows": imported_rows,
+        "errors": errors,
+    }
+
+
 @app.get("/sync-diagnostics", response_class=HTMLResponse)
 def sync_diagnostics(request: Request):
     checks = {
