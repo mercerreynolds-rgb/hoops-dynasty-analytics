@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import os
 import secrets
-from __future__ import annotations
+
+
 
 from fastapi import Depends, FastAPI, Form, Request, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
