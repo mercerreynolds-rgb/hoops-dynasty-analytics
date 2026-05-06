@@ -3,6 +3,7 @@
 {% block content %}
 <div class="card">
   <h2>Decision Engine — {{ team }} / {{ world }}</h2>
+  <p><a href="/players?team={{ team|urlencode }}&world={{ world|urlencode }}">Game Ratings →</a></p>
   <p class="muted">
     This connects player ratings to actual production. Expected BPR is a first-pass estimate from the player’s best ratings-based role score.
     Impact Gap = Actual BPR - Expected BPR. By default this uses only games against non-Sim AI opponents.
@@ -14,7 +15,7 @@
       <option value="{{ t.team }}" {% if t.team == team %}selected{% endif %}>{{ t.team }} — {{ t.world }}</option>
       {% endfor %}
     </select>
-    <input type="hidden" name="world" value="{{ world }}">
+    
     <label style="margin-left:12px;">
       <input type="checkbox" name="human_only" value="true" {% if human_only %}checked{% endif %}> Human-coached opponents only
     </label>

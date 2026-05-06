@@ -970,6 +970,16 @@ def build_decision_engine_rows(session: Session, team: str, human_only: bool = F
     return rows
 
 
+
+def world_for_team(team: str, fallback: str = "") -> str:
+    try:
+        for t in get_tracked_team_options():
+            if t.get("team") == team:
+                return t.get("world") or fallback
+    except Exception:
+        pass
+    return fallback
+
 @app.get("/decision", response_class=HTMLResponse)
 def decision_dashboard(
     request: Request,
@@ -978,6 +988,8 @@ def decision_dashboard(
     human_only: bool = True,
     session: Session = Depends(get_session),
 ):
+    world = world_for_team(team, world)
+
     try:
         teams = get_tracked_team_options()
     except Exception:
@@ -1146,7 +1158,8 @@ def rating_player_detail(player_id: str, request: Request, session: Session = De
 @app.get("/players", response_class=HTMLResponse)
 def players(
     request: Request,
-    team: str = DEFAULT_TEAM,
+    team: str = DEFAULT_TEAM if "DEFAULT_TEAM" in globals() else "E. Connecticut St.",
+    world: str = DEFAULT_WORLD if "DEFAULT_WORLD" in globals() else "Phelan",
     session: Session = Depends(get_session),
 ):
     rows = session.exec(
@@ -1154,4 +1167,19 @@ def players(
         .where(PlayerGameStat.team == team)
         .order_by(PlayerGameStat.bpr.desc())
     ).all()
-    return templates.TemplateResponse("players.html", {"request": request, "rows": rows})
+
+    try:
+        teams = get_tracked_team_options()
+    except Exception:
+        teams = [{"team": team, "world": world}]
+
+    return templates.TemplateResponse(
+        "players.html",
+        {
+            "request": request,
+            "rows": rows,
+            "team": team,
+            "world": world,
+            "teams": teams,
+        },
+    )

@@ -177,3 +177,12 @@ Fixes Sync All Ratings error:
 - name 'parse_team_ratings_url' is not defined
 
 Adds /sync-diagnostics to verify parser functions are loaded.
+
+
+## v28 multi-team page fix
+
+Fixes ECSU-only leftovers:
+- /players now accepts selected team and world
+- Game Ratings page has team selector
+- Decision Engine normalizes world from selected team
+- Season page links to correct team Game Ratings
