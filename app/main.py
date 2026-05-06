@@ -1,8 +1,11 @@
+import os
+import secrets
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, Request, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlmodel import Session, select, delete
 
 from app.database import get_session, init_db
@@ -12,8 +15,37 @@ from app.ratings import calculate_box_ratings
 from app.impact import calculate_game_impacts
 from app.config import TRACKED_TEAMS, DEFAULT_TEAM, DEFAULT_WORLD
 
-app = FastAPI(title="Hoops Dynasty Analytics")
+app = FastAPI(title="Hoops Dynasty Analytics", dependencies=[Depends(require_auth)])
 templates = Jinja2Templates(directory="app/templates")
+
+
+security = HTTPBasic()
+
+
+def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    expected_username = os.getenv("APP_USERNAME")
+    expected_password = os.getenv("APP_PASSWORD")
+
+    # If either variable is missing, fail closed.
+    if not expected_username or not expected_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="App login is not configured.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    username_ok = secrets.compare_digest(credentials.username, expected_username)
+    password_ok = secrets.compare_digest(credentials.password, expected_password)
+
+    if not (username_ok and password_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid login.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    return credentials.username
+
 
 
 @app.on_event("startup")

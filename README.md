@@ -112,3 +112,14 @@ Toggle available on /decision page.
 
 Fixes internal server error on /decision caused by referencing non-existent Game fields.
 Human-only filtering now uses away_team/home_team and away_coach/home_coach correctly.
+
+
+## v23 password protection
+
+Adds Basic Auth protection to the entire app.
+
+Required Render environment variables:
+- APP_USERNAME
+- APP_PASSWORD
+
+If either variable is missing, the app denies access.
