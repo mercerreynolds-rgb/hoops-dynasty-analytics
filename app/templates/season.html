@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>{{ team }} Season Dashboard — {{ world }}</h2>
+  <p><a href="/decision?team={{ team|urlencode }}&world={{ world|urlencode }}">Open Decision Engine →</a> | <a href="/players?team={{ team|urlencode }}&world={{ world|urlencode }}">Game Ratings →</a></p>
+  <p class="muted">{{ games|length }} imported games. Player ratings are minutes-weighted across imported games.</p>
+  <form method="get" action="/season">
+    <select name="team">
+      {% for t in teams %}
+      <option value="{{ t.team }}" {% if t.team == team %}selected{% endif %}>{{ t.team }} — {{ t.world }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="world" value="{{ world }}">
+    <button type="submit">Switch Team</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Metric Notes</h2>
+  <p class="muted">
+    Usage% estimates possessions used from FGA + 0.44*FTA + TO. TS% is true shooting.
+    ORtg/DRtg are on-court points scored/allowed per 100 possessions. Net On/Off compares player on-court net rating to off-court net rating.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Season Player Ratings</h2>
+  <table>
+    <tr>
+      <th>Player</th><th>Role</th><th>GP</th><th>MIN</th><th>MPG</th><th>PPG</th><th>Usage%</th><th>TS%</th>
+      <th>True OBPR</th><th>True DBPR</th><th>BPR</th>
+      <th>ORtg</th><th>DRtg</th><th>On Net</th><th>Net On/Off</th>
+    </tr>
+    {% for p in player_rows %}
+    <tr>
+      <td><a href="/season/players/{{ p.player|urlencode }}?team={{ team|urlencode }}&world={{ world|urlencode }}">{{ p.player }}</a></td>
+      <td>{{ p.role }}</td>
+      <td>{{ p.gp }}</td>
+      <td>{{ p.minutes }}</td>
+      <td>{{ "%.1f"|format(p.mpg) }}</td>
+      <td>{{ "%.1f"|format(p.ppg) }}</td>
+      <td>{{ "%.1f"|format(p.usage) }}</td>
+      <td>{{ "%.1f"|format(p.ts_pct) }}</td>
+      <td>{{ "%.2f"|format(p.obpr) }}</td>
+      <td>{{ "%.2f"|format(p.dbpr) }}</td>
+      <td><strong>{{ "%.2f"|format(p.bpr) }}</strong></td>
+      <td>{{ "%.1f"|format(p.on_ortg) }}</td>
+      <td>{{ "%.1f"|format(p.on_drtg) }}</td>
+      <td>{{ "%.1f"|format(p.net_on) }}</td>
+      <td>{{ "%.1f"|format(p.net_onoff) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Best Lineups — Min {{ min_lineup_possessions }} Possessions</h2>
+  <table>
+    <tr><th>Lineup</th><th>Segments</th><th>PF</th><th>PA</th><th>Poss</th><th>Off Eff</th><th>Def Eff</th><th>Net</th></tr>
+    {% for l in lineup_rows_20[:30] %}
+    <tr>
+      <td>{{ l.lineup }}</td><td>{{ l.segments }}</td><td>{{ l.pf }}</td><td>{{ l.pa }}</td><td>{{ l.poss_for }}</td>
+      <td>{{ "%.1f"|format(l.off_eff) }}</td><td>{{ "%.1f"|format(l.def_eff) }}</td>
+      <td><strong>{{ "%.1f"|format(l.net_eff) }}</strong></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Player Form — Last 5 vs Season</h2>
+  <table>
+    <tr>
+      <th>Player</th><th>Season BPR</th><th>Last 5 BPR</th><th>Trend</th>
+      <th>Wins BPR</th><th>Losses BPR</th><th>Win/Loss Gap</th>
+      <th>vs Human</th><th>vs Sim AI</th><th>Human/Sim Gap</th>
+    </tr>
+    {% for p in form_rows %}
+    <tr>
+      <td>{{ p.player }}</td>
+      <td>{{ "%.2f"|format(p.season_bpr) }}</td>
+      <td>{{ "%.2f"|format(p.last5_bpr) }}</td>
+      <td><strong>{{ "%.2f"|format(p.trend) }}</strong></td>
+      <td>{{ "%.2f"|format(p.wins_bpr) }}</td>
+      <td>{{ "%.2f"|format(p.losses_bpr) }}</td>
+      <td>{{ "%.2f"|format(p.win_loss_gap) }}</td>
+      <td>{{ "%.2f"|format(p.human_bpr) }}</td>
+      <td>{{ "%.2f"|format(p.sim_bpr) }}</td>
+      <td>{{ "%.2f"|format(p.human_sim_gap) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Opponent Control Split</h2>
+  <table>
+    <tr><th>Split</th><th>Games</th><th>Team Player BPR</th></tr>
+    <tr><td>Human-controlled opponent</td><td>{{ control_summary.human_games }}</td><td>{{ "%.2f"|format(control_summary.human_bpr) }}</td></tr>
+    <tr><td>Sim AI opponent</td><td>{{ control_summary.sim_games }}</td><td>{{ "%.2f"|format(control_summary.sim_bpr) }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Imported Games</h2>
+  <table>
+    <tr><th>ID</th><th>Date</th><th>Game</th><th>Score</th><th>Opponent Coach</th><th>Control</th></tr>
+    {% for g in games %}
+    <tr>
+      <td>{{ g.id }}</td>
+      <td>{{ g.game_date or "" }}</td>
+      <td><a href="/games/{{ g.id }}">{{ g.away_team }} at {{ g.home_team }}</a></td>
+      <td>{{ g.away_score }} - {{ g.home_score }}</td>
+      <td>{% if g.away_team == team %}{{ g.home_coach or "" }}{% else %}{{ g.away_coach or "" }}{% endif %}</td>
+      <td>{% set oc = g.home_coach if g.away_team == team else g.away_coach %}{% if oc == "Sim AI" %}Sim AI{% else %}Human{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
