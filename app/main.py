@@ -701,6 +701,131 @@ def build_rating_summary(rows):
     }
 
 
+def expected_bpr_from_role_score(role_score_value: float) -> float:
+    """
+    Transparent first-pass mapping from role score to expected BPR.
+
+    Role scores are roughly 0-100. BPR in this app is currently on a larger
+    single-game-style scale, so this intentionally compresses ratings into a
+    conservative expected impact range.
+
+    Tune later after enough player-seasons:
+      Expected BPR = (BestRoleScore - 50) / 4
+    """
+    return (role_score_value - 50.0) / 4.0
+
+
+def decision_label(impact_gap: float) -> str:
+    if impact_gap >= 6:
+        return "Major Overperformer"
+    if impact_gap >= 3:
+        return "Overperformer"
+    if impact_gap <= -6:
+        return "Major Underperformer"
+    if impact_gap <= -3:
+        return "Underperformer"
+    return "As Expected"
+
+
+def build_rating_lookup(session: Session):
+    snapshots = session.exec(select(PlayerRatingSnapshot)).all()
+    grouped = {}
+    for snap in snapshots:
+        if not snap.player:
+            continue
+        key = snap.player.strip().lower()
+        grouped.setdefault(key, []).append(snap)
+
+    lookup = {}
+    for key, rows in grouped.items():
+        summary = build_rating_summary(rows)
+        if summary:
+            lookup[key] = {
+                "rows": rows,
+                "summary": summary,
+            }
+    return lookup
+
+
+def build_decision_engine_rows(session: Session, team: str):
+    stats = session.exec(select(PlayerGameStat).where(PlayerGameStat.team == team)).all()
+    impacts = session.exec(select(PlayerImpact).where(PlayerImpact.team == team)).all()
+    perf_rows = build_player_season_summary(stats, impacts)
+    ratings_lookup = build_rating_lookup(session)
+
+    rows = []
+    for perf in perf_rows:
+        player_key = perf["player"].strip().lower()
+        rating_obj = ratings_lookup.get(player_key)
+        if not rating_obj:
+            rows.append({
+                **perf,
+                "has_ratings": False,
+                "current_ovr": None,
+                "ovr_growth": None,
+                "best_role": "No ratings imported",
+                "role_score": 0.0,
+                "expected_bpr": 0.0,
+                "impact_gap": 0.0,
+                "decision": "Import ratings",
+            })
+            continue
+
+        rating_summary = rating_obj["summary"]
+        best_role = rating_summary["best_role"] or {"role": "", "score": 0}
+        expected_bpr = expected_bpr_from_role_score(best_role["score"])
+        actual_bpr = perf["bpr"]
+        impact_gap = actual_bpr - expected_bpr
+
+        rows.append({
+            **perf,
+            "has_ratings": True,
+            "current_ovr": rating_summary["current"].overall,
+            "ovr_growth": rating_summary["growth"]["overall"],
+            "best_role": best_role["role"],
+            "role_score": best_role["score"],
+            "expected_bpr": expected_bpr,
+            "impact_gap": impact_gap,
+            "decision": decision_label(impact_gap),
+        })
+
+    rows.sort(key=lambda r: r["impact_gap"], reverse=True)
+    return rows
+
+
+
+@app.get("/decision", response_class=HTMLResponse)
+def decision_dashboard(
+    request: Request,
+    team: str = DEFAULT_TEAM if "DEFAULT_TEAM" in globals() else "E. Connecticut St.",
+    world: str = DEFAULT_WORLD if "DEFAULT_WORLD" in globals() else "Phelan",
+    session: Session = Depends(get_session),
+):
+    try:
+        teams = get_tracked_team_options()
+    except Exception:
+        teams = [{"team": team, "world": world}]
+
+    rows = build_decision_engine_rows(session, team)
+    missing_count = sum(1 for r in rows if not r["has_ratings"])
+    over_count = sum(1 for r in rows if r["decision"] in {"Overperformer", "Major Overperformer"})
+    under_count = sum(1 for r in rows if r["decision"] in {"Underperformer", "Major Underperformer"})
+
+    return templates.TemplateResponse(
+        "decision.html",
+        {
+            "request": request,
+            "team": team,
+            "world": world,
+            "teams": teams,
+            "rows": rows,
+            "missing_count": missing_count,
+            "over_count": over_count,
+            "under_count": under_count,
+        },
+    )
+
+
 @app.post("/ratings/import")
 def import_ratings_history(
     url: str = Form(...),

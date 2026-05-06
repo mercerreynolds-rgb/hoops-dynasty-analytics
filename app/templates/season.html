@@ -3,6 +3,7 @@
 {% block content %}
 <div class="card">
   <h2>{{ team }} Season Dashboard — {{ world }}</h2>
+  <p><a href="/decision?team={{ team|urlencode }}&world={{ world|urlencode }}">Open Decision Engine →</a></p>
   <p class="muted">{{ games|length }} imported games. Player ratings are minutes-weighted across imported games.</p>
   <form method="get" action="/season">
     <select name="team">

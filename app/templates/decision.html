@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>Decision Engine — {{ team }} / {{ world }}</h2>
+  <p class="muted">
+    This connects player ratings to actual production. Expected BPR is a first-pass estimate from the player’s best ratings-based role score.
+    Impact Gap = Actual BPR - Expected BPR.
+  </p>
+
+  <form method="get" action="/decision">
+    <select name="team">
+      {% for t in teams %}
+      <option value="{{ t.team }}" {% if t.team == team %}selected{% endif %}>{{ t.team }} — {{ t.world }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="world" value="{{ world }}">
+    <button type="submit">Switch Team</button>
+  </form>
+
+  <p>
+    <span class="pill">Overperformers: {{ over_count }}</span>
+    <span class="pill">Underperformers: {{ under_count }}</span>
+    <span class="pill">Missing ratings: {{ missing_count }}</span>
+  </p>
+</div>
+
+<div class="card">
+  <h2>Ratings vs Production</h2>
+  <table>
+    <tr>
+      <th>Player</th>
+      <th>Decision</th>
+      <th>Actual BPR</th>
+      <th>Expected BPR</th>
+      <th>Impact Gap</th>
+      <th>OVR</th>
+      <th>OVR Growth</th>
+      <th>Best Role</th>
+      <th>Role Score</th>
+      <th>Usage%</th>
+      <th>TS%</th>
+      <th>Net On/Off</th>
+    </tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.player }}</td>
+      <td><strong>{{ r.decision }}</strong></td>
+      <td>{{ "%.2f"|format(r.bpr) }}</td>
+      <td>{{ "%.2f"|format(r.expected_bpr) }}</td>
+      <td><strong>{{ "%.2f"|format(r.impact_gap) }}</strong></td>
+      <td>{% if r.current_ovr is not none %}{{ r.current_ovr }}{% endif %}</td>
+      <td>{% if r.ovr_growth is not none %}{{ r.ovr_growth }}{% endif %}</td>
+      <td>{{ r.best_role }}</td>
+      <td>{{ "%.1f"|format(r.role_score) }}</td>
+      <td>{{ "%.1f"|format(r.usage) }}</td>
+      <td>{{ "%.1f"|format(r.ts_pct) }}</td>
+      <td>{{ "%.1f"|format(r.net_onoff) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>How to read this</h2>
+  <p>
+    <strong>Major Overperformer</strong>: production is well above ratings-based expectation. Could be a system fit, hidden gem, or lineup beneficiary.
+  </p>
+  <p>
+    <strong>Major Underperformer</strong>: ratings suggest more value than the player is producing. Check role, usage, stamina, lineup context, and shot profile.
+  </p>
+  <p class="muted">
+    The Expected BPR formula is intentionally simple for now: (Best Role Score - 50) / 4. Once enough seasons are imported, this can be replaced with a learned regression based on your actual Hoops Dynasty data.
+  </p>
+</div>
+{% endblock %}

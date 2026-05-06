@@ -81,3 +81,18 @@ Fixes ratings/OVR growth baseline:
 - previous behavior could use the first/oldest row, often `Season End`
 - new behavior uses the `Season Start` row from the lowest numbered season
 - fallback order: Recruiting/Signed, then earliest row in lowest season
+
+
+## v20 decision engine
+
+Adds:
+- /decision dashboard
+- Connects ratings history to season BPR by player name
+- Expected BPR from best role score
+- Impact Gap = Actual BPR - Expected BPR
+- Labels: Overperformer / Underperformer / As Expected / Import ratings
+
+Current Expected BPR formula:
+  (Best Role Score - 50) / 4
+
+This is transparent and should later be replaced by a learned regression once enough player-season data exists.
