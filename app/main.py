@@ -747,9 +747,18 @@ def build_rating_lookup(session: Session):
     return lookup
 
 
-def build_decision_engine_rows(session: Session, team: str):
+def build_decision_engine_rows(session: Session, team: str, human_only: bool = False):
     stats = session.exec(select(PlayerGameStat).where(PlayerGameStat.team == team)).all()
     impacts = session.exec(select(PlayerImpact).where(PlayerImpact.team == team)).all()
+
+    if human_only:
+        human_game_ids = {
+            g.id for g in session.exec(select(Game)).all()
+            if g.team == team and g.opponent_coach and g.opponent_coach != "Sim AI"
+        }
+        stats = [s for s in stats if s.game_id in human_game_ids]
+        impacts = [i for i in impacts if i.game_id in human_game_ids]
+
     perf_rows = build_player_season_summary(stats, impacts)
     ratings_lookup = build_rating_lookup(session)
 
@@ -799,6 +808,7 @@ def decision_dashboard(
     request: Request,
     team: str = DEFAULT_TEAM if "DEFAULT_TEAM" in globals() else "E. Connecticut St.",
     world: str = DEFAULT_WORLD if "DEFAULT_WORLD" in globals() else "Phelan",
+    human_only: bool = True,
     session: Session = Depends(get_session),
 ):
     try:
@@ -806,7 +816,7 @@ def decision_dashboard(
     except Exception:
         teams = [{"team": team, "world": world}]
 
-    rows = build_decision_engine_rows(session, team)
+    rows = build_decision_engine_rows(session, team, human_only=human_only)
     missing_count = sum(1 for r in rows if not r["has_ratings"])
     over_count = sum(1 for r in rows if r["decision"] in {"Overperformer", "Major Overperformer"})
     under_count = sum(1 for r in rows if r["decision"] in {"Underperformer", "Major Underperformer"})
@@ -822,6 +832,7 @@ def decision_dashboard(
             "missing_count": missing_count,
             "over_count": over_count,
             "under_count": under_count,
+            "human_only": human_only,
         },
     )
 

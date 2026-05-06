@@ -96,3 +96,13 @@ Current Expected BPR formula:
   (Best Role Score - 50) / 4
 
 This is transparent and should later be replaced by a learned regression once enough player-season data exists.
+
+
+## v21 human-only decision engine filter
+
+Decision Engine now supports filtering to only games against non-Sim AI opponents.
+
+Default behavior:
+- Human-coached opponents only
+
+Toggle available on /decision page.
