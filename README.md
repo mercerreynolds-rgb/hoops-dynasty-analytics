@@ -195,3 +195,20 @@ Fixes Decision Engine game filter:
 - unchecked checkbox issue removed
 - auto-falls back to All games when selected team has zero human-coached games
 - shows human-game and all-game counts
+
+
+## v31 True Potential Engine
+Adds /potential and /potential/{player_id}.
+Uses baseline colors from lowest-season Season Start when detected; otherwise infers color from observed growth.
+Growth rules: green +30, blue +20, black +10, yellow +5, red +0.
+Flags green PE/LP outlier watch.
+
+
+## v32 WE potential fix
+
+Updates True Potential Engine:
+- WE is always black
+- WE is not capped by normal color-potential rules
+- WE projected with average +20 career growth for now
+- lower starting WE gets a slightly slower temporary projection
+- archive data should replace this assumption later

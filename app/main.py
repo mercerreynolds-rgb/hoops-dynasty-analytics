@@ -1119,6 +1119,210 @@ def decision_dashboard(
     )
 
 
+COLOR_EXPECTED_GROWTH = {"green": 30, "blue": 20, "black": 10, "yellow": 5, "red": 0, "": 0}
+WE_EXPECTED_GROWTH = 20
+
+RATING_META = [
+    ("athleticism", "A"), ("speed", "SPD"), ("rebounding", "REB"), ("defense", "DE"),
+    ("shot_blocking", "BLK"), ("low_post", "LP"), ("perimeter", "PE"),
+    ("ball_handling", "BH"), ("passing", "P"), ("work_ethic", "WE"), ("stamina", "ST"),
+]
+
+
+def infer_color_from_growth(growth: int) -> str:
+    if growth >= 30:
+        return "green"
+    if growth >= 20:
+        return "blue"
+    if growth >= 10:
+        return "black"
+    if growth >= 5:
+        return "yellow"
+    return "red"
+
+
+def adjusted_expected_growth(color: str, start_value: int, work_ethic: int, rating_key: str) -> float:
+    # WE is special in Hoops Dynasty:
+    # - always black
+    # - not capped by the color-growth system
+    # - growth appears driven mostly by playing time
+    # - for now, assume average +20 career growth, with low-start WE slightly slower
+    if rating_key == "work_ethic":
+        if start_value < 40:
+            return max(0, WE_EXPECTED_GROWTH - 4)
+        if start_value < 55:
+            return max(0, WE_EXPECTED_GROWTH - 2)
+        if start_value >= 80:
+            return WE_EXPECTED_GROWTH + 2
+        return WE_EXPECTED_GROWTH
+
+    base = COLOR_EXPECTED_GROWTH.get((color or "").lower(), 0)
+    we_adj = 0
+    if work_ethic >= 80:
+        we_adj = 4
+    elif work_ethic >= 70:
+        we_adj = 2
+    elif work_ethic < 40:
+        we_adj = -3
+    elif work_ethic < 55:
+        we_adj = -1
+
+    # Non-WE ratings are capped at 100.
+    return max(0, min(100 - start_value, base + we_adj))
+
+
+def rating_value(snapshot, key: str):
+    return getattr(snapshot, key, 0) or 0
+
+
+def rating_color(snapshot, key: str):
+    return (getattr(snapshot, f"{key}_color", "") or "").lower().strip()
+
+
+def build_potential_summary(rows):
+    summary = build_rating_summary(rows)
+    if not summary:
+        return None
+
+    current = summary["current"]
+    start = summary["start"]
+    start_we = rating_value(start, "work_ethic")
+
+    rating_rows = []
+    projected_total = 0
+    current_total = 0
+    remaining_total = 0
+    color_source_counts = {"detected": 0, "inferred": 0}
+
+    for key, label in RATING_META:
+        start_val = rating_value(start, key)
+        current_val = rating_value(current, key)
+        actual_growth = current_val - start_val
+        detected_color = rating_color(start, key)
+
+        if key == "work_ethic":
+            color = "black"
+            color_source = "fixed"
+        elif detected_color:
+            color = detected_color
+            color_source = "detected"
+            color_source_counts["detected"] += 1
+        else:
+            color = infer_color_from_growth(actual_growth)
+            color_source = "inferred"
+            color_source_counts["inferred"] += 1
+
+        expected_growth = adjusted_expected_growth(color, start_val, start_we, key)
+
+        if key == "work_ethic":
+            # WE has no color cap. Do not clamp expected peak to 100 here.
+            expected_peak = round(start_val + expected_growth, 1)
+        else:
+            expected_peak = min(100, round(start_val + expected_growth, 1))
+
+        remaining = max(0, expected_peak - current_val)
+        outlier_flag = color == "green" and key in {"perimeter", "low_post"} and start_we >= 55
+
+        projected_total += expected_peak
+        current_total += current_val
+        remaining_total += remaining
+
+        rating_rows.append({
+            "key": key, "label": label, "start": start_val, "current": current_val,
+            "growth": actual_growth, "color": color, "color_source": color_source,
+            "expected_growth": expected_growth, "expected_peak": expected_peak,
+            "remaining": remaining, "outlier_flag": outlier_flag,
+        })
+
+    projected_proxy = type("ProjectedSnapshot", (), {})()
+    for r in rating_rows:
+        setattr(projected_proxy, r["key"], r["expected_peak"])
+
+    role_scores = []
+    for role, weights in ROLE_WEIGHTS.items():
+        current_score = role_score(current, weights)
+        projected_score = role_score(projected_proxy, weights)
+        role_scores.append({
+            "role": role, "current_score": current_score,
+            "projected_score": projected_score,
+            "projected_gain": projected_score - current_score,
+        })
+    role_scores.sort(key=lambda r: r["projected_score"], reverse=True)
+
+    avg_remaining = remaining_total / len(rating_rows) if rating_rows else 0
+    projected_ovr = min(1000, round((current.overall or 0) + avg_remaining * 10, 1))
+
+    return {
+        "summary": summary, "current": current, "start": start,
+        "baseline_note": summary.get("baseline_note", ""),
+        "rating_rows": rating_rows, "role_scores": role_scores,
+        "best_projected_role": role_scores[0] if role_scores else None,
+        "current_total": current_total, "projected_total": projected_total,
+        "remaining_total": remaining_total, "projected_ovr": projected_ovr,
+        "color_source_counts": color_source_counts,
+        "has_green_offense_outlier": any(r["outlier_flag"] for r in rating_rows),
+    }
+
+
+def build_all_potential_rows(session: Session, team: str = ""):
+    snapshots = session.exec(select(PlayerRatingSnapshot)).all()
+    grouped = {}
+    for snap in snapshots:
+        if team and (snap.team or "") != team:
+            continue
+        key = (snap.player or "Unknown Player", snap.player_id or "", snap.team or "")
+        grouped.setdefault(key, []).append(snap)
+
+    rows = []
+    for (player, player_id, snap_team), snap_rows in grouped.items():
+        potential = build_potential_summary(snap_rows)
+        if not potential:
+            continue
+        best_role = potential["best_projected_role"] or {"role": "", "projected_score": 0, "projected_gain": 0}
+        rows.append({
+            "player": player, "player_id": player_id, "team": snap_team,
+            "current_ovr": potential["current"].overall,
+            "projected_ovr": potential["projected_ovr"],
+            "remaining_total": potential["remaining_total"],
+            "best_projected_role": best_role["role"],
+            "projected_role_score": best_role["projected_score"],
+            "projected_role_gain": best_role["projected_gain"],
+            "baseline_note": potential["baseline_note"],
+            "has_green_offense_outlier": potential["has_green_offense_outlier"],
+            "detected_colors": potential["color_source_counts"]["detected"],
+            "inferred_colors": potential["color_source_counts"]["inferred"],
+        })
+
+    rows.sort(key=lambda r: (r["remaining_total"], r["projected_role_score"]), reverse=True)
+    return rows
+
+@app.get("/potential", response_class=HTMLResponse)
+def potential_dashboard(request: Request, team: str = "", session: Session = Depends(get_session)):
+    try:
+        teams = get_tracked_team_options()
+    except Exception:
+        teams = []
+    rows = build_all_potential_rows(session, team=team)
+    return templates.TemplateResponse(
+        "potential.html",
+        {"request": request, "rows": rows, "teams": teams, "team": team},
+    )
+
+
+@app.get("/potential/{player_id}", response_class=HTMLResponse)
+def potential_player_detail(player_id: str, request: Request, session: Session = Depends(get_session)):
+    rows = session.exec(
+        select(PlayerRatingSnapshot).where(PlayerRatingSnapshot.player_id == player_id)
+    ).all()
+    rows = sorted(rows, key=lambda r: (int(r.season or 0), r.id or 0), reverse=True)
+    potential = build_potential_summary(rows)
+    return templates.TemplateResponse(
+        "potential_detail.html",
+        {"request": request, "rows": rows, "potential": potential, "player": rows[0].player if rows else player_id, "player_id": player_id},
+    )
+
+
+
 @app.post("/ratings/import")
 def import_ratings_history(
     url: str = Form(...),
