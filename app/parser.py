@@ -780,6 +780,23 @@ def normalize_rating_color(cell) -> str:
         str(cell),
     ]).lower()
 
+    # WIS potential classes:
+    # potential_veryhigh = green
+    # potential_high = blue
+    # potential_average = black
+    # potential_low = yellow
+    # potential_verylow = red
+    if "potential_veryhigh" in raw:
+        return "green"
+    if "potential_high" in raw:
+        return "blue"
+    if "potential_average" in raw:
+        return "black"
+    if "potential_verylow" in raw:
+        return "red"
+    if "potential_low" in raw:
+        return "yellow"
+
     # Prefer explicit words/classes.
     for color in ["green", "blue", "yellow", "red", "black"]:
         if color in raw:

@@ -1123,9 +1123,19 @@ COLOR_EXPECTED_GROWTH = {"green": 30, "blue": 20, "black": 10, "yellow": 5, "red
 WE_EXPECTED_GROWTH = 20
 
 RATING_META = [
-    ("athleticism", "A"), ("speed", "SPD"), ("rebounding", "REB"), ("defense", "DE"),
-    ("shot_blocking", "BLK"), ("low_post", "LP"), ("perimeter", "PE"),
-    ("ball_handling", "BH"), ("passing", "P"), ("work_ethic", "WE"), ("stamina", "ST"),
+    ("athleticism", "A"),
+    ("speed", "SPD"),
+    ("rebounding", "REB"),
+    ("defense", "DE"),
+    ("shot_blocking", "BLK"),
+    ("low_post", "LP"),
+    ("perimeter", "PE"),
+    ("ball_handling", "BH"),
+    ("passing", "P"),
+    ("work_ethic", "WE"),
+    ("stamina", "ST"),
+    ("durability", "DU"),
+    ("free_throw", "FT"),
 ]
 
 

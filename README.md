@@ -212,3 +212,22 @@ Updates True Potential Engine:
 - WE projected with average +20 career growth for now
 - lower starting WE gets a slightly slower temporary projection
 - archive data should replace this assumption later
+
+
+## v33 DU/FT projection fix
+
+Adds DU and FT back into:
+- projected peak calculations
+- remaining growth calculations
+- potential projection tables
+- projected role scoring inputs
+
+
+## v34 actual WIS color parser
+
+Maps WhatIfSports potential CSS classes:
+- potential_veryhigh -> green
+- potential_high -> blue
+- potential_average -> black
+- potential_low -> yellow
+- potential_verylow -> red
