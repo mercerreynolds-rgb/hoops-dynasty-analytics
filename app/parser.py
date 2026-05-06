@@ -817,50 +817,75 @@ RATING_COLOR_FIELDS = [
 ]
 
 
+
 def parse_team_ratings_url(url: str) -> dict:
     """
     Parse a TeamProfile/Ratings.aspx page and find each player's RatingsHistory URL.
+
+    v26: aggressive player-id detection. WIS sometimes puts pid in hrefs,
+    onclick handlers, JS fragments, or profile links that are not obvious anchors.
     """
     html = fetch_html(url)
     soup = BeautifulSoup(html, "lxml")
+    lines = clean_lines_from_html(html)
 
     tid_match = re.search(r"[?&]tid=(\d+)", url)
     tid = tid_match.group(1) if tid_match else None
 
-    players = []
-    seen = set()
+    players_by_pid = {}
 
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        text = " ".join(a.get_text(" ", strip=True).split())
+    def add_pid(pid: str, name: str = ""):
+        if not pid:
+            return
+        if pid in players_by_pid:
+            if name and (not players_by_pid[pid]["player"] or players_by_pid[pid]["player"] == pid):
+                players_by_pid[pid]["player"] = name
+            return
 
-        # Player links can point to PlayerProfile or RatingsHistory; derive history URL from pid.
-        if "pid=" not in href:
-            continue
-
-        pid_match = re.search(r"pid=(\d+)", href)
-        if not pid_match:
-            continue
-        pid = pid_match.group(1)
-
-        if pid in seen:
-            continue
-        seen.add(pid)
-
-        history_url = f"https://www.whatifsports.com/hd/PlayerProfile/RatingsHistory.aspx?tid={tid}&pid={pid}"
-        profile_url = href
-        if profile_url.startswith("/"):
-            profile_url = "https://www.whatifsports.com" + profile_url
-        elif profile_url.startswith("PlayerProfile"):
-            profile_url = "https://www.whatifsports.com/hd/" + profile_url
-
-        players.append({
-            "player": text or pid,
+        players_by_pid[pid] = {
+            "player": name or pid,
             "player_id": pid,
             "tid": tid,
-            "ratings_history_url": history_url,
-            "profile_url": profile_url,
-        })
+            "ratings_history_url": f"https://www.whatifsports.com/hd/PlayerProfile/RatingsHistory.aspx?tid={tid}&pid={pid}",
+            "profile_url": f"https://www.whatifsports.com/hd/PlayerProfile/Default.aspx?tid={tid}&pid={pid}",
+        }
 
-    print("TEAM RATINGS PARSER DEBUG:", {"url": url, "tid": tid, "players": len(players)}, flush=True)
+    # 1) Anchor hrefs.
+    for a in soup.find_all("a", href=True):
+        href = a.get("href", "")
+        text = " ".join(a.get_text(" ", strip=True).split())
+        m = re.search(r"pid=(\d+)", href)
+        if m:
+            add_pid(m.group(1), text)
+
+    # 2) onclick / data attrs / full HTML regex.
+    for pid in re.findall(r"pid=(\d+)", html):
+        add_pid(pid)
+
+    # 3) Common PlayerProfile URL variants.
+    for pid in re.findall(r"PlayerProfile[^\\\"'>]*?(\d{6,})", html):
+        add_pid(pid)
+
+    # 4) If names are near player id links but anchor text was blank, try title attrs.
+    for tag in soup.find_all(attrs=True):
+        raw = " ".join([str(v) for v in tag.attrs.values()])
+        m = re.search(r"pid=(\d+)", raw)
+        if m:
+            name = " ".join(tag.get_text(" ", strip=True).split())
+            add_pid(m.group(1), name)
+
+    players = list(players_by_pid.values())
+
+    # Remove obvious non-player duplicates if any.
+    players = [p for p in players if p["player_id"] and p["player_id"].isdigit()]
+    players.sort(key=lambda p: p["player"])
+
+    print("TEAM RATINGS PARSER DEBUG:", {
+        "url": url,
+        "tid": tid,
+        "players": len(players),
+        "sample": players[:5],
+        "preview": "\\n".join(lines[:80]),
+    }, flush=True)
+
     return {"source_url": url, "tid": tid, "players": players}

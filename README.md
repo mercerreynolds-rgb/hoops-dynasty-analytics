@@ -157,3 +157,15 @@ Adds:
 - PlayerRatingSnapshot color fields with automatic SQLite migration
 
 Color detection is best-effort based on WIS HTML classes/styles. If WIS does not expose colors in HTML, values import normally and color fields stay blank.
+
+
+## v26 ratings sync diagnostics
+
+Fixes/diagnoses Ratings Sync:
+- More aggressive Team Ratings page player-id detection
+- Shows Last Ratings Sync Result on /ratings
+- Logs TEAM RATINGS PARSER DEBUG with player count and sample players
+
+If sync still imports nothing, copy the Last Ratings Sync Result and Render log lines:
+TEAM RATINGS PARSER DEBUG
+SYNC RATINGS ALL RESULT

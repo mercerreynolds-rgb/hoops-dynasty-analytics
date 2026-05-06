@@ -47,6 +47,8 @@ def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
 app = FastAPI(title="Hoops Dynasty Analytics", dependencies=[Depends(require_auth)])
 templates = Jinja2Templates(directory="app/templates")
 
+LAST_RATINGS_SYNC_RESULT = []
+
 
 @app.on_event("startup")
 def on_startup():
@@ -466,6 +468,7 @@ def import_game(url: str = Form(...), session: Session = Depends(get_session)):
 
 @app.post("/sync-ratings-all")
 def sync_ratings_all(session: Session = Depends(get_session)):
+    global LAST_RATINGS_SYNC_RESULT
     results = []
     for target in RATINGS_SYNC_TARGETS:
         try:
@@ -482,13 +485,16 @@ def sync_ratings_all(session: Session = Depends(get_session)):
                 "error": str(exc),
             })
 
+    LAST_RATINGS_SYNC_RESULT = results
     print("SYNC RATINGS ALL RESULT:", results, flush=True)
     return RedirectResponse("/ratings", status_code=303)
 
 
 @app.post("/sync-ratings-team")
 def sync_ratings_team(ratings_url: str = Form(...), team: str = Form(""), session: Session = Depends(get_session)):
+    global LAST_RATINGS_SYNC_RESULT
     result = sync_team_ratings_url(ratings_url, team, session)
+    LAST_RATINGS_SYNC_RESULT = [result]
     print("SYNC RATINGS TEAM RESULT:", result, flush=True)
     return RedirectResponse("/ratings", status_code=303)
 
@@ -1097,6 +1103,7 @@ def ratings_dashboard(request: Request, session: Session = Depends(get_session))
         {
             "request": request,
             "player_rows": player_rows,
+            "last_sync_result": LAST_RATINGS_SYNC_RESULT,
         },
     )
 
