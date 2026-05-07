@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Empirical Growth Model</h2>
+  <p class="muted">
+    This uses imported Ratings History to learn from actual growth: first Season Start → latest/current.
+    It is the foundation for archive-driven potential projections.
+  </p>
+  <p>
+    <span class="pill">Players {{ player_count }}</span>
+    <span class="pill">Rating samples {{ sample_count }}</span>
+  </p>
+  <p><a href="/archive">Import archive roster</a></p>
+</div>
+
+<div class="card">
+  <h2>Growth Summary by Inferred Band</h2>
+  {% if summary %}
+  <table>
+    <tr><th>Rating</th><th>Band</th><th>N</th><th>Avg Growth</th><th>Median</th><th>Min</th><th>Max</th></tr>
+    {% for r in summary %}
+    <tr>
+      <td>{{ r.rating }}</td>
+      <td>{{ r.band }}</td>
+      <td>{{ r.n }}</td>
+      <td>{{ "%.1f"|format(r.avg) }}</td>
+      <td>{{ r.median }}</td>
+      <td>{{ r.min }}</td>
+      <td>{{ r.max }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No samples yet. Sync/import ratings first.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Largest Realized Growth Samples</h2>
+  <table>
+    <tr>
+      <th>Player</th><th>Team</th><th>Rating</th><th>Start</th><th>Latest</th><th>Growth</th><th>Band</th><th>Start WE</th><th>Seasons</th>
+    </tr>
+    {% for s in top_growth %}
+    <tr>
+      <td>{{ s.player }}</td>
+      <td>{{ s.team }}</td>
+      <td>{{ s.rating }}</td>
+      <td>{{ s.start }}</td>
+      <td>{{ s.current }}</td>
+      <td><strong>{{ s.growth }}</strong></td>
+      <td>{{ s.band }}</td>
+      <td>{{ s.start_we }}</td>
+      <td>{{ s.seasons_span }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
