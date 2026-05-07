@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% if not baseline %}
+<div class="card">
+  <h2>No projection baseline found</h2>
+  <p class="muted">No rating snapshots exist for player {{ player_id }}.</p>
+</div>
+{% else %}
+
+<div class="card">
+  <h2>{{ player }} — Projection Setup</h2>
+  <p><a href="/projections">← Back to Projection Board</a></p>
+  <p>
+    <span class="pill">Baseline: {{ baseline.season }} {{ baseline.snapshot_type }}</span>
+    <span class="pill">Start OVR {{ "%.0f"|format(projection.start_ovr) }}</span>
+    <span class="pill">Projected OVR {{ "%.0f"|format(projection.projected_ovr) }}</span>
+    <span class="pill">Growth {{ "%.1f"|format(projection.growth_ovr) }}</span>
+  </p>
+</div>
+
+<div class="card">
+  <h2>Editable Inputs</h2>
+  <form method="post" action="/projections/{{ player_id }}">
+    <label>Position / Projected Position</label>
+    <input type="text" name="pos" value="{{ profile.pos or '' }}" placeholder="PG, SG, SF, PF, C">
+
+    <label>Development / Minutes Tier</label>
+    <select name="development_tier">
+      {% for key, val in minutes_tier.items() %}
+      <option value="{{ key }}" {% if profile.development_tier == key %}selected{% endif %}>
+        {{ key }} — {{ val.label }} — {{ val.minutes }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <label>Seasons in Program</label>
+    <select name="seasons_in_program">
+      {% for n in [1,2,3,4,5] %}
+      <option value="{{ n }}" {% if profile.seasons_in_program == n %}selected{% endif %}>{{ n }}</option>
+      {% endfor %}
+    </select>
+
+    <h3>Potential Colors</h3>
+    <table>
+      <tr><th>Rating</th><th>Start</th><th>Color</th></tr>
+      {% for r in projection.rows %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td>{{ r.start }}</td>
+        <td>
+          {% if r.key == "work_ethic" %}
+          <strong>black / special</strong>
+          {% else %}
+          <select name="{{ r.key }}_color">
+            {% for c in colors %}
+            <option value="{{ c }}" {% if r.color == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+
+    <button type="submit">Save Projection Inputs</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Projection Output</h2>
+  <p class="muted">
+    Projected growth = base color growth × WE multiplier × minutes-tier multiplier × seasons multiplier, capped at 100.
+    FT is shown but excluded from projected OVR.
+  </p>
+  <p>
+    <span class="pill">WE {{ projection.we }}</span>
+    <span class="pill">WE Multiplier {{ "%.2f"|format(projection.we_multiplier) }}</span>
+    <span class="pill">Minutes Multiplier {{ "%.2f"|format(projection.minutes_multiplier) }}</span>
+    <span class="pill">Seasons Multiplier {{ "%.2f"|format(projection.seasons_multiplier) }}</span>
+  </p>
+
+  <table>
+    <tr><th>Rating</th><th>Start</th><th>Color</th><th>Base Growth</th><th>Projected Growth</th><th>Projected</th><th>OVR?</th></tr>
+    {% for r in projection.rows %}
+    <tr>
+      <td>{{ r.label }}</td>
+      <td>{{ r.start }}</td>
+      <td>{{ r.color }}</td>
+      <td>{{ r.base_growth }}</td>
+      <td>{{ "%.1f"|format(r.growth) }}</td>
+      <td><strong>{{ "%.1f"|format(r.projected) }}</strong></td>
+      <td>{% if r.include %}Yes{% else %}No{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

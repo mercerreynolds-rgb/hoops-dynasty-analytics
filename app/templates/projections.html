@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>Projection Board</h2>
+  <p class="muted">
+    Stable manual projection engine. Uses first Season Start baseline ratings only.
+    You control colors, projected minutes tier, and seasons in program.
+  </p>
+
+  <form method="get" action="/projections">
+    <select name="team">
+      <option value="" {% if not team %}selected{% endif %}>All teams</option>
+      {% for t in teams %}
+      <option value="{{ t.team }}" {% if t.team == team %}selected{% endif %}>{{ t.team }} — {{ t.world }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Players</h2>
+  {% if players %}
+  <table>
+    <tr>
+      <th>Player</th><th>Team</th><th>Baseline</th><th>Dev Tier</th><th>Seasons</th>
+      <th>Start OVR</th><th>Projected OVR</th><th>Growth</th>
+    </tr>
+    {% for p in players %}
+    <tr>
+      <td><a href="/projections/{{ p.player_id }}">{{ p.player }}</a></td>
+      <td>{{ p.team }}</td>
+      <td>{{ p.baseline.season }} {{ p.baseline.snapshot_type }}</td>
+      <td>{{ p.profile.development_tier }}</td>
+      <td>{{ p.profile.seasons_in_program }}</td>
+      <td>{{ "%.0f"|format(p.start_ovr) }}</td>
+      <td><strong>{{ "%.0f"|format(p.projected_ovr) }}</strong></td>
+      <td>{{ "%.1f"|format(p.growth_ovr) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No imported ratings found. Run Sync All Ratings first.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Development Tier Guide</h2>
+  <table>
+    <tr><th>Tier</th><th>Meaning</th><th>Career Minutes</th><th>Multiplier</th></tr>
+    {% for key, val in minutes_tier.items() %}
+    <tr><td>{{ key }}</td><td>{{ val.label }}</td><td>{{ val.minutes }}</td><td>{{ val.multiplier }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
