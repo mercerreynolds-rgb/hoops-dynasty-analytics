@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Archive Roster Import</h2>
+  <p class="muted">
+    Paste a WhatIfSports archive or roster URL. The app will open it in the authenticated browser session, find player links, import their Ratings History,
+    and add them to the empirical growth dataset.
+  </p>
+  <form method="post" action="/archive/import">
+    <label>Archive roster URL</label>
+    <input type="text" name="url" value="https://www.whatifsports.com/hd/archive/Roster.aspx" required>
+    <label><input type="checkbox" name="use_rendered" value="true" checked> Browser-rendered crawl</label>
+    <p class="muted">Use this for WIS archive pages that redirect raw requests to sign-in.</p>
+    <label>Optional team label</label>
+    <input type="text" name="team" placeholder="e.g. Redlands archive">
+    <button type="submit">Import Archive Roster</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Goal</h2>
+  <p>
+    The archive data will let us replace fixed color assumptions with observed growth patterns by rating, position,
+    WE, playing time, usage, and development curve.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Potential Debug — {{ player }}</h2>
+  <p class="muted">Deterministic DOM parse: each rating value/color is mapped by fixed cell position from the actual RatingsHistory row.</p>
+  <p>
+    <span class="pill">Player ID {{ player_id }}</span>
+    <span class="pill">Rows {{ rows_count }}</span>
+    <span class="pill">Detected color cells {{ detected_color_cells }}</span>
+    <span class="pill">Rendered DOM {{ rendered }}</span>
+  </p>
+  <p class="muted">URL: {{ url }}</p>
+  <p><a href="/potential-debug/{{ player_id }}?rendered=true">Rendered DOM</a> | <a href="/potential-debug/{{ player_id }}?rendered=false">Raw HTML</a></p>
+</div>
+
+{% if baseline %}
+<div class="card">
+  <h2>Baseline Used for Potential</h2>
+  <p><strong>{{ baseline.season }} {{ baseline.snapshot_type }}</strong> — OVR {{ baseline.overall }}</p>
+  <table>
+    <tr><th>Rating</th><th>Value</th><th>Color</th></tr>
+    <tr><td>A</td><td>{{ baseline.athleticism }}</td><td>{{ baseline.athleticism_color }}</td></tr>
+    <tr><td>SPD</td><td>{{ baseline.speed }}</td><td>{{ baseline.speed_color }}</td></tr>
+    <tr><td>REB</td><td>{{ baseline.rebounding }}</td><td>{{ baseline.rebounding_color }}</td></tr>
+    <tr><td>DE</td><td>{{ baseline.defense }}</td><td>{{ baseline.defense_color }}</td></tr>
+    <tr><td>BLK</td><td>{{ baseline.shot_blocking }}</td><td>{{ baseline.shot_blocking_color }}</td></tr>
+    <tr><td>LP</td><td>{{ baseline.low_post }}</td><td>{{ baseline.low_post_color }}</td></tr>
+    <tr><td>PE</td><td>{{ baseline.perimeter }}</td><td>{{ baseline.perimeter_color }}</td></tr>
+    <tr><td>BH</td><td>{{ baseline.ball_handling }}</td><td>{{ baseline.ball_handling_color }}</td></tr>
+    <tr><td>P</td><td>{{ baseline.passing }}</td><td>{{ baseline.passing_color }}</td></tr>
+    <tr><td>WE</td><td>{{ baseline.work_ethic }}</td><td>{{ baseline.work_ethic_color }}</td></tr>
+    <tr><td>ST</td><td>{{ baseline.stamina }}</td><td>{{ baseline.stamina_color }}</td></tr>
+    <tr><td>DU</td><td>{{ baseline.durability }}</td><td>{{ baseline.durability_color }}</td></tr>
+    <tr><td>FT</td><td>{{ baseline.free_throw }}</td><td>{{ baseline.free_throw_color }}</td></tr>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>All DOM Rows</h2>
+  {% for row in debug_rows %}
+  <h3>{{ row.season }} {{ row.snapshot_type }} — OVR {{ row.overall }}</h3>
+  <table>
+    <tr><th>#</th><th>Rating</th><th>Value</th><th>Color</th><th>Class</th><th>Cell HTML sample</th></tr>
+    {% for c in row.cells %}
+    <tr>
+      <td>{{ c.index }}</td>
+      <td>{{ c.label }}</td>
+      <td>{{ c.value }}</td>
+      <td>{{ c.color }}</td>
+      <td>{{ c.class }}</td>
+      <td><code>{{ c.html }}</code></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endfor %}
+</div>
+{% endblock %}
