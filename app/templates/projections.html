@@ -4,8 +4,8 @@
 <div class="card">
   <h2>Projection Board</h2>
   <p class="muted">
-    Stable manual projection engine. Uses first Season Start baseline ratings only.
-    You control colors, projected minutes tier, and seasons in program.
+    Manual, stable projection engine. Uses first Season Start baseline ratings only.
+    Inputs are preserved in the database across deploys.
   </p>
 
   <form method="get" action="/projections">
@@ -15,8 +15,52 @@
       <option value="{{ t.team }}" {% if t.team == team %}selected{% endif %}>{{ t.team }} — {{ t.world }}</option>
       {% endfor %}
     </select>
-    <button type="submit">Filter</button>
+
+    <select name="dev_tier">
+      <option value="" {% if not dev_tier %}selected{% endif %}>All dev tiers</option>
+      {% for key, val in minutes_tier.items() %}
+      <option value="{{ key }}" {% if dev_tier == key %}selected{% endif %}>{{ key }} — {{ val.label }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="sort">
+      <option value="projected" {% if sort == "projected" %}selected{% endif %}>Sort: Projected OVR</option>
+      <option value="growth" {% if sort == "growth" %}selected{% endif %}>Sort: Growth</option>
+      <option value="start" {% if sort == "start" %}selected{% endif %}>Sort: Start OVR</option>
+      <option value="role" {% if sort == "role" %}selected{% endif %}>Sort: Role Score</option>
+    </select>
+
+    <button type="submit">Apply</button>
   </form>
+</div>
+
+<div class="card">
+  <h2>Quick Hits</h2>
+  <h3>Highest Projected</h3>
+  <table>
+    <tr><th>Player</th><th>Projected</th><th>Growth</th><th>Best Role</th></tr>
+    {% for p in top_projected %}
+    <tr>
+      <td><a href="/projections/{{ p.player_id }}">{{ p.player }}</a></td>
+      <td>{{ "%.0f"|format(p.projected_ovr) }}</td>
+      <td>{{ "%.1f"|format(p.growth_ovr) }}</td>
+      <td>{{ p.best_role }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h3>Biggest Growth</h3>
+  <table>
+    <tr><th>Player</th><th>Start</th><th>Projected</th><th>Growth</th></tr>
+    {% for p in top_growth %}
+    <tr>
+      <td><a href="/projections/{{ p.player_id }}">{{ p.player }}</a></td>
+      <td>{{ "%.0f"|format(p.start_ovr) }}</td>
+      <td>{{ "%.0f"|format(p.projected_ovr) }}</td>
+      <td>{{ "%.1f"|format(p.growth_ovr) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
 </div>
 
 <div class="card">
@@ -25,7 +69,7 @@
   <table>
     <tr>
       <th>Player</th><th>Team</th><th>Baseline</th><th>Dev Tier</th><th>Seasons</th>
-      <th>Start OVR</th><th>Projected OVR</th><th>Growth</th>
+      <th>Start OVR</th><th>Projected OVR</th><th>Growth</th><th>Best Role</th><th>Role Score</th><th>Flag</th>
     </tr>
     {% for p in players %}
     <tr>
@@ -37,6 +81,9 @@
       <td>{{ "%.0f"|format(p.start_ovr) }}</td>
       <td><strong>{{ "%.0f"|format(p.projected_ovr) }}</strong></td>
       <td>{{ "%.1f"|format(p.growth_ovr) }}</td>
+      <td>{{ p.best_role }}</td>
+      <td>{{ "%.1f"|format(p.best_role_score) }}</td>
+      <td>{{ p.flag }}</td>
     </tr>
     {% endfor %}
   </table>
@@ -46,11 +93,11 @@
 </div>
 
 <div class="card">
-  <h2>Development Tier Guide</h2>
+  <h2>Projected Role Mix</h2>
   <table>
-    <tr><th>Tier</th><th>Meaning</th><th>Career Minutes</th><th>Multiplier</th></tr>
-    {% for key, val in minutes_tier.items() %}
-    <tr><td>{{ key }}</td><td>{{ val.label }}</td><td>{{ val.minutes }}</td><td>{{ val.multiplier }}</td></tr>
+    <tr><th>Role</th><th>Players</th></tr>
+    {% for r in role_summary %}
+    <tr><td>{{ r.role }}</td><td>{{ r.count }}</td></tr>
     {% endfor %}
   </table>
 </div>

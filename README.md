@@ -211,3 +211,16 @@ Adds:
 - FT excluded from projected OVR
 
 Built from stable v30 sync-ratings codebase. No Playwright required.
+
+
+## v32 projection board upgrades + role fit
+
+Preserves existing PlayerProjectionProfile table/data.
+
+Adds:
+- sortable/filterable Projection Board
+- Quick Hits: highest projected and biggest growth
+- projected role fit scores
+- role mix summary
+- simple flags
+- 4-year vs 5-year redshirt scenario comparison

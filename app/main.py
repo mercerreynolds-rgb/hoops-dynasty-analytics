@@ -1221,6 +1221,48 @@ def project_player(profile, baseline):
     }
 
 
+
+PROJECTION_ROLE_WEIGHTS = {
+    "Lead Guard": {"speed": 1.0, "perimeter": 1.1, "ball_handling": 1.4, "passing": 1.4, "defense": 0.8, "stamina": 0.5},
+    "Scoring Guard": {"speed": 0.9, "perimeter": 1.5, "ball_handling": 1.1, "passing": 0.6, "defense": 0.7, "stamina": 0.5},
+    "Two-Way Wing": {"athleticism": 1.0, "speed": 0.8, "defense": 1.3, "perimeter": 1.0, "ball_handling": 0.7, "passing": 0.6, "stamina": 0.5},
+    "Stretch Forward": {"athleticism": 0.8, "rebounding": 0.8, "defense": 0.9, "low_post": 0.7, "perimeter": 1.3, "stamina": 0.5},
+    "Interior Big": {"athleticism": 0.8, "rebounding": 1.4, "defense": 1.0, "shot_blocking": 1.2, "low_post": 1.2, "stamina": 0.5},
+    "Defensive Stopper": {"athleticism": 1.0, "speed": 0.9, "defense": 1.6, "shot_blocking": 0.7, "stamina": 0.6},
+}
+
+
+def projected_rating_map(projection):
+    return {r["key"]: r["projected"] for r in projection["rows"]}
+
+
+def score_projected_role(projection, weights):
+    ratings = projected_rating_map(projection)
+    total_weight = sum(weights.values()) or 1
+    return sum(ratings.get(key, 0) * weight for key, weight in weights.items()) / total_weight
+
+
+def projected_role_scores(projection):
+    scores = [{"role": role, "score": score_projected_role(projection, weights)} for role, weights in PROJECTION_ROLE_WEIGHTS.items()]
+    scores.sort(key=lambda r: r["score"], reverse=True)
+    return scores
+
+
+def projection_flag(player_row):
+    growth = player_row["growth_ovr"]
+    projected = player_row["projected_ovr"]
+    tier = player_row["profile"].development_tier
+    if projected >= 760:
+        return "Star ceiling"
+    if growth >= 120:
+        return "Huge development upside"
+    if tier in {"green", "blue"} and projected < 650:
+        return "Minutes investment risk"
+    if projected >= 700:
+        return "Strong rotation piece"
+    return "Depth / monitor"
+
+
 def get_projection_players(session: Session, team: str = ""):
     snapshots = session.exec(select(PlayerRatingSnapshot)).all()
     grouped = {}
@@ -1238,7 +1280,8 @@ def get_projection_players(session: Session, team: str = ""):
             continue
         profile = get_or_create_projection_profile(session, baseline)
         projection = project_player(profile, baseline)
-        players.append({
+        role_scores = projected_role_scores(projection)
+        row = {
             "player_id": player_id,
             "player": baseline.player,
             "team": baseline.team,
@@ -1247,21 +1290,56 @@ def get_projection_players(session: Session, team: str = ""):
             "start_ovr": projection["start_ovr"],
             "projected_ovr": projection["projected_ovr"],
             "growth_ovr": projection["growth_ovr"],
-        })
+            "best_role": role_scores[0]["role"] if role_scores else "",
+            "best_role_score": role_scores[0]["score"] if role_scores else 0,
+        }
+        row["flag"] = projection_flag(row)
+        players.append(row)
     players.sort(key=lambda r: r["projected_ovr"], reverse=True)
     return players
 
 
 @app.get("/projections", response_class=HTMLResponse)
-def projections_board(request: Request, team: str = "", session: Session = Depends(get_session)):
+def projections_board(request: Request, team: str = "", sort: str = "projected", dev_tier: str = "", session: Session = Depends(get_session)):
     try:
         teams = get_tracked_team_options()
     except Exception:
         teams = []
     players = get_projection_players(session, team=team)
+
+    if dev_tier:
+        players = [p for p in players if p["profile"].development_tier == dev_tier]
+
+    if sort == "growth":
+        players.sort(key=lambda p: p["growth_ovr"], reverse=True)
+    elif sort == "start":
+        players.sort(key=lambda p: p["start_ovr"], reverse=True)
+    elif sort == "role":
+        players.sort(key=lambda p: p["best_role_score"], reverse=True)
+    else:
+        players.sort(key=lambda p: p["projected_ovr"], reverse=True)
+
+    top_projected = players[:5]
+    top_growth = sorted(players, key=lambda p: p["growth_ovr"], reverse=True)[:5]
+    role_counts = {}
+    for p in players:
+        role_counts[p["best_role"]] = role_counts.get(p["best_role"], 0) + 1
+    role_summary = [{"role": k, "count": v} for k, v in sorted(role_counts.items(), key=lambda x: x[0])]
+
     return templates.TemplateResponse(
         "projections.html",
-        {"request": request, "players": players, "teams": teams, "team": team, "minutes_tier": MINUTES_TIER},
+        {
+            "request": request,
+            "players": players,
+            "teams": teams,
+            "team": team,
+            "sort": sort,
+            "dev_tier": dev_tier,
+            "minutes_tier": MINUTES_TIER,
+            "top_projected": top_projected,
+            "top_growth": top_growth,
+            "role_summary": role_summary,
+        },
     )
 
 
@@ -1282,9 +1360,12 @@ def projection_detail(player_id: str, request: Request, session: Session = Depen
             "baseline": baseline,
             "profile": profile,
             "projection": projection,
+            "role_scores": projected_role_scores(projection),
             "ratings": PROJECTION_RATINGS,
             "colors": PROJECTION_COLORS,
             "minutes_tier": MINUTES_TIER,
+            "scenario_4": project_player(type("ScenarioProfile", (), {**profile.__dict__, "seasons_in_program": 4})(), baseline),
+            "scenario_5": project_player(type("ScenarioProfile", (), {**profile.__dict__, "seasons_in_program": 5})(), baseline),
         },
     )
 

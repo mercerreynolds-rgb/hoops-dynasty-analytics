@@ -95,5 +95,36 @@
     {% endfor %}
   </table>
 </div>
+
+<div class="card">
+  <h2>Role Fit</h2>
+  <table>
+    <tr><th>Projected Role</th><th>Score</th></tr>
+    {% for r in role_scores %}
+    <tr>
+      <td>{{ r.role }}</td>
+      <td><strong>{{ "%.1f"|format(r.score) }}</strong></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Redshirt / Seasons Scenario</h2>
+  <table>
+    <tr><th>Scenario</th><th>Projected OVR</th><th>Growth</th></tr>
+    <tr>
+      <td>4 seasons</td>
+      <td>{{ "%.0f"|format(scenario_4.projected_ovr) }}</td>
+      <td>{{ "%.1f"|format(scenario_4.growth_ovr) }}</td>
+    </tr>
+    <tr>
+      <td>5 seasons</td>
+      <td>{{ "%.0f"|format(scenario_5.projected_ovr) }}</td>
+      <td>{{ "%.1f"|format(scenario_5.growth_ovr) }}</td>
+    </tr>
+  </table>
+</div>
+
 {% endif %}
 {% endblock %}
