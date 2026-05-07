@@ -236,3 +236,15 @@ Changes:
 - adds Triangle Fit, Press Fit, and Combined System Fit
 - adds sort options for System/Triangle/Press fit
 - adds player detail section explaining projected system fit
+
+
+## v34 current ratings system fit
+
+Adds:
+- /current-ratings page
+- Triangle/Press/System Fit applied to latest current ratings
+- current role fit scores
+- sortable current ratings table
+- links from nav and Ratings page
+
+No database schema change.

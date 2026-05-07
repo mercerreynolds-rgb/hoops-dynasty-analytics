@@ -1283,6 +1283,108 @@ def weighted_score_from_projection(projection, weights):
     return sum(ratings.get(key, 0) * weight for key, weight in weights.items()) / total_weight
 
 
+
+def weighted_score_from_snapshot(snapshot, weights):
+    total_weight = sum(weights.values()) or 1
+    total = 0
+    for key, weight in weights.items():
+        total += projection_rating_value(snapshot, key) * weight
+    return total / total_weight
+
+
+def triangle_press_current_fit(snapshot):
+    triangle = weighted_score_from_snapshot(snapshot, TRIANGLE_WEIGHTS)
+    press = weighted_score_from_snapshot(snapshot, PRESS_WEIGHTS)
+    combined = (
+        triangle * TRIANGLE_PRESS_COMBINED_WEIGHTS["triangle"]
+        + press * TRIANGLE_PRESS_COMBINED_WEIGHTS["press"]
+    )
+    return {
+        "triangle": triangle,
+        "press": press,
+        "system": combined,
+        "triangle_grade": system_fit_grade(triangle),
+        "press_grade": system_fit_grade(press),
+        "system_grade": system_fit_grade(combined),
+    }
+
+
+def current_system_role_scores(snapshot):
+    def score(weights):
+        return weighted_score_from_snapshot(snapshot, weights)
+
+    scores = [
+        {"role": "Triangle Creator", "score": score({
+            "ball_handling": 1.25, "passing": 1.35, "perimeter": 1.05, "speed": 0.55, "stamina": 0.45
+        })},
+        {"role": "Triangle Scorer", "score": score({
+            "perimeter": 1.25, "low_post": 1.05, "ball_handling": 0.75, "passing": 0.65, "athleticism": 0.55
+        })},
+        {"role": "Triangle Big Hub", "score": score({
+            "low_post": 1.25, "passing": 0.95, "rebounding": 1.00, "defense": 0.85, "stamina": 0.55
+        })},
+        {"role": "Press Guard/Wing", "score": score({
+            "defense": 1.45, "speed": 1.15, "stamina": 1.15, "athleticism": 0.85, "ball_handling": 0.45
+        })},
+        {"role": "Press Big", "score": score({
+            "defense": 1.25, "rebounding": 1.25, "stamina": 1.05, "athleticism": 0.75, "shot_blocking": 0.65
+        })},
+        {"role": "Two-Way System Fit", "score": score({
+            "defense": 1.25, "stamina": 0.90, "passing": 0.85, "ball_handling": 0.80, "perimeter": 0.80, "speed": 0.75
+        })},
+    ]
+    scores.sort(key=lambda r: r["score"], reverse=True)
+    return scores
+
+
+def build_current_rating_rows(session: Session, team: str = ""):
+    snapshots = session.exec(select(PlayerRatingSnapshot)).all()
+    grouped = {}
+    for snap in snapshots:
+        if team and (snap.team or "") != team:
+            continue
+        if not snap.player_id:
+            continue
+        grouped.setdefault(snap.player_id, []).append(snap)
+
+    rows = []
+    for player_id, snaps in grouped.items():
+        summary = build_rating_summary(snaps)
+        if not summary:
+            continue
+        current = summary["current"]
+        baseline = summary["start"]
+        fit = triangle_press_current_fit(current)
+        role_scores = current_system_role_scores(current)
+        current_ovr = projection_baseline_ovr(current) if "projection_baseline_ovr" in globals() else sum(
+            projection_rating_value(current, key) for key, _label, include in PROJECTION_RATINGS if include
+        )
+        start_ovr = projection_baseline_ovr(baseline) if "projection_baseline_ovr" in globals() else sum(
+            projection_rating_value(baseline, key) for key, _label, include in PROJECTION_RATINGS if include
+        )
+        rows.append({
+            "player_id": player_id,
+            "player": current.player,
+            "team": current.team,
+            "season": current.season,
+            "snapshot_type": current.snapshot_type,
+            "current": current,
+            "baseline": baseline,
+            "current_ovr": current_ovr,
+            "start_ovr": start_ovr,
+            "growth_ovr": current_ovr - start_ovr,
+            "triangle_fit": fit["triangle"],
+            "press_fit": fit["press"],
+            "system_fit": fit["system"],
+            "system_grade": fit["system_grade"],
+            "best_role": role_scores[0]["role"] if role_scores else "",
+            "best_role_score": role_scores[0]["score"] if role_scores else 0,
+        })
+
+    rows.sort(key=lambda r: r["system_fit"], reverse=True)
+    return rows
+
+
 def weighted_score_from_baseline(baseline, weights):
     total_weight = sum(weights.values()) or 1
     total = 0
@@ -1590,6 +1692,53 @@ def import_ratings_history(
     result = import_ratings_history_url(url, session, player_name=player_name, team=team)
     print("RATINGS IMPORT RESULT:", result, flush=True)
     return RedirectResponse("/ratings", status_code=303)
+
+
+
+@app.get("/current-ratings", response_class=HTMLResponse)
+def current_ratings_system_fit(
+    request: Request,
+    team: str = "",
+    sort: str = "system",
+    session: Session = Depends(get_session),
+):
+    try:
+        teams = get_tracked_team_options()
+    except Exception:
+        teams = []
+
+    rows = build_current_rating_rows(session, team=team)
+
+    if sort == "triangle":
+        rows.sort(key=lambda r: r["triangle_fit"], reverse=True)
+    elif sort == "press":
+        rows.sort(key=lambda r: r["press_fit"], reverse=True)
+    elif sort == "ovr":
+        rows.sort(key=lambda r: r["current_ovr"], reverse=True)
+    elif sort == "growth":
+        rows.sort(key=lambda r: r["growth_ovr"], reverse=True)
+    elif sort == "role":
+        rows.sort(key=lambda r: r["best_role_score"], reverse=True)
+    else:
+        rows.sort(key=lambda r: r["system_fit"], reverse=True)
+
+    top_system = rows[:5]
+    top_press = sorted(rows, key=lambda r: r["press_fit"], reverse=True)[:5]
+    top_triangle = sorted(rows, key=lambda r: r["triangle_fit"], reverse=True)[:5]
+
+    return templates.TemplateResponse(
+        "current_ratings.html",
+        {
+            "request": request,
+            "rows": rows,
+            "teams": teams,
+            "team": team,
+            "sort": sort,
+            "top_system": top_system,
+            "top_press": top_press,
+            "top_triangle": top_triangle,
+        },
+    )
 
 
 @app.get("/ratings", response_class=HTMLResponse)

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>Current Ratings — Triangle + Press Fit</h2>
+  <p class="muted">
+    Uses each player's latest/current ratings and the same system-fit logic as the Projection tab.
+    This is current basketball value, not projected ceiling.
+  </p>
+
+  <form method="get" action="/current-ratings">
+    <select name="team">
+      <option value="" {% if not team %}selected{% endif %}>All teams</option>
+      {% for t in teams %}
+      <option value="{{ t.team }}" {% if t.team == team %}selected{% endif %}>{{ t.team }} — {{ t.world }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="sort">
+      <option value="system" {% if sort == "system" %}selected{% endif %}>Sort: System Fit</option>
+      <option value="triangle" {% if sort == "triangle" %}selected{% endif %}>Sort: Triangle Fit</option>
+      <option value="press" {% if sort == "press" %}selected{% endif %}>Sort: Press Fit</option>
+      <option value="ovr" {% if sort == "ovr" %}selected{% endif %}>Sort: Current OVR</option>
+      <option value="growth" {% if sort == "growth" %}selected{% endif %}>Sort: Growth Since Baseline</option>
+      <option value="role" {% if sort == "role" %}selected{% endif %}>Sort: Current Role Score</option>
+    </select>
+
+    <button type="submit">Apply</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Quick Hits</h2>
+  <h3>Best Current System Fits</h3>
+  <table>
+    <tr><th>Player</th><th>System Fit</th><th>Triangle</th><th>Press</th><th>Best Role</th></tr>
+    {% for p in top_system %}
+    <tr>
+      <td>{{ p.player }}</td>
+      <td><strong>{{ "%.1f"|format(p.system_fit) }}</strong> — {{ p.system_grade }}</td>
+      <td>{{ "%.1f"|format(p.triangle_fit) }}</td>
+      <td>{{ "%.1f"|format(p.press_fit) }}</td>
+      <td>{{ p.best_role }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h3>Best Current Press Fits</h3>
+  <table>
+    <tr><th>Player</th><th>Press</th><th>System Fit</th></tr>
+    {% for p in top_press %}
+    <tr>
+      <td>{{ p.player }}</td>
+      <td><strong>{{ "%.1f"|format(p.press_fit) }}</strong></td>
+      <td>{{ "%.1f"|format(p.system_fit) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Current Ratings Table</h2>
+  {% if rows %}
+  <table>
+    <tr>
+      <th>Player</th><th>Team</th><th>Snapshot</th><th>Start OVR</th><th>Current OVR</th><th>Growth</th>
+      <th>Triangle</th><th>Press</th><th>System Fit</th><th>Best Current Role</th><th>Role Score</th>
+      <th>A</th><th>SPD</th><th>REB</th><th>DE</th><th>BLK</th><th>LP</th><th>PE</th><th>BH</th><th>P</th><th>WE</th><th>ST</th><th>DU</th>
+    </tr>
+    {% for p in rows %}
+    <tr>
+      <td>{{ p.player }}</td>
+      <td>{{ p.team }}</td>
+      <td>{{ p.season }} {{ p.snapshot_type }}</td>
+      <td>{{ "%.0f"|format(p.start_ovr) }}</td>
+      <td><strong>{{ "%.0f"|format(p.current_ovr) }}</strong></td>
+      <td>{{ "%.1f"|format(p.growth_ovr) }}</td>
+      <td>{{ "%.1f"|format(p.triangle_fit) }}</td>
+      <td>{{ "%.1f"|format(p.press_fit) }}</td>
+      <td><strong>{{ "%.1f"|format(p.system_fit) }}</strong> — {{ p.system_grade }}</td>
+      <td>{{ p.best_role }}</td>
+      <td>{{ "%.1f"|format(p.best_role_score) }}</td>
+      <td>{{ p.current.athleticism }}</td>
+      <td>{{ p.current.speed }}</td>
+      <td>{{ p.current.rebounding }}</td>
+      <td>{{ p.current.defense }}</td>
+      <td>{{ p.current.shot_blocking }}</td>
+      <td>{{ p.current.low_post }}</td>
+      <td>{{ p.current.perimeter }}</td>
+      <td>{{ p.current.ball_handling }}</td>
+      <td>{{ p.current.passing }}</td>
+      <td>{{ p.current.work_ethic }}</td>
+      <td>{{ p.current.stamina }}</td>
+      <td>{{ p.current.durability }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No current rating snapshots found. Run Sync All Ratings first.</p>
+  {% endif %}
+</div>
+{% endblock %}
