@@ -140,3 +140,10 @@ class PlayerRatingSnapshot(SQLModel, table=True):
     stamina_color: str = ""
     durability_color: str = ""
     free_throw_color: str = ""
+
+
+class PlayerPotentialColorOverride(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    player_id: str = Field(index=True)
+    rating_key: str = Field(index=True)
+    color: str = ""

@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
   <h2>{{ player }} — True Potential</h2>
-  <p><a href="/potential">← Back to Potential Board</a></p>
+  <p><a href="/potential">← Back to Potential Board</a> | <a href="/potential-debug/{{ player_id }}">Potential Debug</a></p>
   {% if potential %}
   <p>
     <span class="pill">Start OVR {{ "%.0f"|format(potential.start_ovr) }}</span>
@@ -16,6 +16,39 @@
   {% endif %}
   {% endif %}
 </div>
+
+
+<div class="card">
+  <h2>Manual Baseline Color Overrides</h2>
+  <p class="muted">
+    Use this when the app cannot reliably detect WIS colors. These overrides apply to the first Season Start baseline and take priority over detected/inferred colors. WE is fixed separately and FT is excluded from total projection.
+  </p>
+  {% if potential %}
+  <form method="post" action="/potential/{{ player_id }}/colors">
+    <table>
+      <tr><th>Rating</th><th>Start</th><th>Detected/Inferred</th><th>Manual Override</th></tr>
+      {% for r in potential.rating_rows %}
+      {% if r.key != "work_ethic" and r.key != "free_throw" %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td>{{ r.start_display }}</td>
+        <td>{{ r.color }} ({{ r.color_source }})</td>
+        <td>
+          <select name="color_{{ r.key }}">
+            {% for c in color_options %}
+            <option value="{{ c }}" {% if overrides.get(r.key, "") == c %}selected{% endif %}>{% if c %}{{ c }}{% else %}-- no override --{% endif %}</option>
+            {% endfor %}
+          </select>
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </table>
+    <button type="submit">Save Color Overrides</button>
+  </form>
+  {% endif %}
+</div>
+
 
 {% if potential %}
 <div class="card">

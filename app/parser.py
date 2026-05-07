@@ -585,40 +585,101 @@ def _to_int(value: str) -> int:
 
 
 
-def parse_ratings_history_url(url: str) -> dict:
-    """
-    Hard-anchored, color-aware parser for WIS HD RatingsHistory.aspx.
 
-    Uses PlayerProfile endpoint because it has the stable RatingsHistory text and OVR structure.
-    """
+RATING_DOM_COLUMNS = [
+    ("athleticism", "A"), ("speed", "SPD"), ("rebounding", "REB"), ("defense", "DE"),
+    ("shot_blocking", "BLK"), ("low_post", "LP"), ("perimeter", "PE"),
+    ("ball_handling", "BH"), ("passing", "P"), ("work_ethic", "WE"),
+    ("stamina", "ST"), ("durability", "DU"), ("free_throw", "FT"),
+]
+
+
+def parse_rating_number(text: str):
+    text = str(text or "").strip()
+    try:
+        return int(text)
+    except Exception:
+        return text
+
+
+def rating_cell_color(cell, rating_key: str) -> str:
+    if rating_key == "work_ethic":
+        return "black"
+    return normalize_rating_color(cell)
+
+
+def build_rating_row_from_dom_cells(cells) -> dict | None:
+    if len(cells) < 15:
+        return None
+
+    texts = [" ".join(c.get_text(" ", strip=True).split()) for c in cells]
+    season = texts[0].strip()
+    snapshot_type = texts[1].strip()
+
+    if not re.match(r"^\d+$", season):
+        return None
+    if snapshot_type not in {"Current", "Season Start", "Season End", "Recruiting", "Signed"}:
+        return None
+
+    row = {"season": season, "snapshot_type": snapshot_type}
+    numeric_total_ex_ft = 0
+    debug_cells = []
+
+    for idx, ((key, label), cell, raw_text) in enumerate(zip(RATING_DOM_COLUMNS, cells[2:15], texts[2:15])):
+        value = parse_rating_number(raw_text)
+        color = rating_cell_color(cell, key)
+
+        row[key] = value
+        row[f"{key}_color"] = color
+
+        if key != "free_throw":
+            try:
+                numeric_total_ex_ft += int(value)
+            except Exception:
+                pass
+
+        debug_cells.append({
+            "index": idx,
+            "key": key,
+            "label": label,
+            "value": value,
+            "color": color,
+            "class": " ".join(cell.get("class", [])) if hasattr(cell, "get") else "",
+            "html": str(cell)[:300],
+        })
+
+    if len(cells) >= 16:
+        try:
+            row["overall"] = int(texts[15])
+        except Exception:
+            row["overall"] = numeric_total_ex_ft
+    else:
+        row["overall"] = numeric_total_ex_ft
+
+    row["_debug_cells"] = debug_cells
+    return row
+
+
+def parse_ratings_history_dom(url: str) -> dict:
     original_url = url
-    url = normalize_ratings_history_url(url)
+    url = normalize_ratings_history_url(url) if "normalize_ratings_history_url" in globals() else url
     html = fetch_html(url)
-    lines = clean_lines_from_html(html)
     soup = BeautifulSoup(html, "lxml")
+    lines = clean_lines_from_html(html)
 
-    pid_match = re.search(r"[?&]pid=(\d+)", url)
-    tid_match = re.search(r"[?&]tid=(\d+)", url)
+    pid_match = re.search(r"[?&]pid=(\d+)", original_url) or re.search(r"[?&]pid=(\d+)", url)
+    tid_match = re.search(r"[?&]tid=(\d+)", original_url) or re.search(r"[?&]tid=(\d+)", url)
     player_id = pid_match.group(1) if pid_match else None
     tid = tid_match.group(1) if tid_match else None
 
     player = None
-    team = None
-    class_tokens = {"Fr.", "So.", "Jr.", "Sr.", "Fr", "So", "Jr", "Sr"}
-    nav_words = {"Ratings", "Statistics", "Game Log", "Awards", "Ratings History", "More", "Show More"}
-
-    for i in range(0, min(len(lines) - 2, 120)):
-        if lines[i + 1] in class_tokens:
-            candidate = lines[i].strip()
-            if candidate and candidate not in nav_words and not candidate.startswith("#"):
-                player = candidate
-                break
-
-    if not player and lines:
+    if lines:
         m = re.search(r" - ([^-]+?) - Ratings History", lines[0])
         if m:
             player = m.group(1).strip()
 
+    team = None
+    nav_words = {"Ratings", "Statistics", "Game Log", "Awards", "Ratings History", "More", "Show More"}
     for i in range(0, min(len(lines) - 1, 50)):
         if lines[i].startswith("#") and i + 1 < len(lines):
             candidate = lines[i + 1].strip()
@@ -626,194 +687,98 @@ def parse_ratings_history_url(url: str) -> dict:
                 team = candidate
                 break
 
-    header_variants = [
-        ["Sn.", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PE", "BH", "P", "WE", "ST", "DU", "FT", "OVR"],
-        ["Sn.", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PER", "BH", "P", "WE", "ST", "DU", "FT", "OVR"],
-        ["Sn", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PE", "BH", "P", "WE", "ST", "DU", "FT", "OVR"],
-        ["Season", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PE", "BH", "P", "WE", "ST", "DU", "FT", "OVR"],
-
-        # PlayerHistory endpoint often omits OVR.
-        ["Sn.", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PE", "BH", "P", "WE", "ST", "DU", "FT"],
-        ["Sn.", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PER", "BH", "P", "WE", "ST", "DU", "FT"],
-        ["Sn", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PE", "BH", "P", "WE", "ST", "DU", "FT"],
-        ["Season", "Type", "A", "SPD", "REB", "DE", "BLK", "LP", "PE", "BH", "P", "WE", "ST", "DU", "FT"],
-    ]
-
-    header_idx = None
-    for seq in header_variants:
-        n = len(seq)
-        for i in range(0, max(len(lines) - n + 1, 0)):
-            if lines[i:i + n] == seq:
-                header_idx = i + n
-                break
-        if header_idx is not None:
-            break
-
-    if header_idx is None:
-        for i in range(0, len(lines) - 5):
-            if lines[i] in {"Sn.", "Sn", "Season"} and lines[i + 1] == "Type":
-                window = lines[i:i + 25]
-                if "OVR" in window:
-                    header_idx = i + window.index("OVR") + 1
-                    break
-                if "FT" in window:
-                    header_idx = i + window.index("FT") + 1
-                    break
-
     rows = []
+    debug_rows = []
 
-    def _to_int_local(value: str) -> int:
+    for tr in soup.find_all("tr"):
+        cells = tr.find_all(["td", "th"])
+        parsed = build_rating_row_from_dom_cells(cells)
+        if not parsed:
+            continue
+        dbg = parsed.pop("_debug_cells", [])
+        rows.append(parsed)
+        debug_rows.append({
+            "season": parsed["season"],
+            "snapshot_type": parsed["snapshot_type"],
+            "overall": parsed["overall"],
+            "cells": dbg,
+        })
+
+    # Deduplicate table repeats.
+    deduped = []
+    seen = set()
+    for row in rows:
+        key = (row["season"], row["snapshot_type"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    rows = deduped
+
+    def season_int(row):
         try:
-            return int(str(value).strip())
+            return int(row.get("season") or 0)
         except Exception:
             return 0
 
-    def add_row(parts, colors=None):
-        # Supported shapes:
-        # with OVR:    season, type, A, SPD, REB, DE, BLK, LP, PE, BH, P, WE, ST, DU, FT, OVR
-        # without OVR: season, type, A, SPD, REB, DE, BLK, LP, PE, BH, P, WE, ST, DU, FT
-        if len(parts) < 15:
-            return False
+    baseline_row = None
+    if rows:
+        min_season = min(season_int(r) for r in rows if season_int(r) > 0)
+        baseline_row = next((r for r in rows if season_int(r) == min_season and r.get("snapshot_type") == "Season Start"), None)
+        if baseline_row is None:
+            baseline_row = next((r for r in rows if season_int(r) == min_season), None)
 
-        season = str(parts[0]).strip()
-        typ = str(parts[1]).strip()
-        vals = [str(v).strip() for v in parts[2:]]
-
-        if not re.match(r"^\d+$", season):
-            return False
-        if len(vals) < 13 or not re.match(r"^\d+$", vals[0]):
-            return False
-
-        color_vals = colors or [""] * 13
-        color_vals = (color_vals + [""] * 13)[:13]
-
-        # WIS OVR equals the sum of visible numeric ratings excluding FT.
-        # If endpoint omits OVR, calculate it.
-        calculated_overall = sum(_to_int_local(v) for v in vals[:12])
-        overall_value = _to_int_local(vals[13]) if len(vals) >= 14 else calculated_overall
-
-        row = {
-            "season": season,
-            "snapshot_type": typ,
-            "athleticism": _to_int_local(vals[0]),
-            "speed": _to_int_local(vals[1]),
-            "rebounding": _to_int_local(vals[2]),
-            "defense": _to_int_local(vals[3]),
-            "shot_blocking": _to_int_local(vals[4]),
-            "low_post": _to_int_local(vals[5]),
-            "perimeter": _to_int_local(vals[6]),
-            "ball_handling": _to_int_local(vals[7]),
-            "passing": _to_int_local(vals[8]),
-            "work_ethic": _to_int_local(vals[9]),
-            "stamina": _to_int_local(vals[10]),
-            "durability": vals[11],
-            "free_throw": vals[12],
-            "overall": overall_value,
-            "athleticism_color": color_vals[0],
-            "speed_color": color_vals[1],
-            "rebounding_color": color_vals[2],
-            "defense_color": color_vals[3],
-            "shot_blocking_color": color_vals[4],
-            "low_post_color": color_vals[5],
-            "perimeter_color": color_vals[6],
-            "ball_handling_color": color_vals[7],
-            "passing_color": color_vals[8],
-            "work_ethic_color": color_vals[9],
-            "stamina_color": color_vals[10],
-            "durability_color": color_vals[11],
-            "free_throw_color": color_vals[12],
-        }
-        rows.append(row)
-        return True
-
-    # First try soup table parsing to capture colors.
-    header_names = {"Sn.", "Sn", "Season"}
-    for table in soup.find_all("table"):
-        table_rows = table.find_all("tr")
-        for tr_idx, tr in enumerate(table_rows):
-            cells = tr.find_all(["th", "td"])
-            texts = [" ".join(c.get_text(" ", strip=True).split()) for c in cells]
-            if len(texts) >= 16 and texts[0] in header_names and texts[1] == "Type" and "OVR" in texts:
-                for row_tr in table_rows[tr_idx + 1:]:
-                    row_cells = row_tr.find_all(["td", "th"])
-                    row_texts = [" ".join(c.get_text(" ", strip=True).split()) for c in row_cells]
-                    if len(row_texts) < 15:
-                        continue
-                    color_vals = [normalize_rating_color(c) for c in row_cells[2:15]]
-                    add_row(row_texts[:16] if len(row_texts) >= 16 else row_texts[:15], color_vals)
-                break
-        if rows:
-            break
-
-    # HTML row fallback: find rows whose first two cells look like Season + Type.
-    # This captures actual potential_* classes even if the header matching failed.
-    if not rows:
-        for tr in soup.find_all("tr"):
-            cells = tr.find_all(["td", "th"])
-            texts = [" ".join(c.get_text(" ", strip=True).split()) for c in cells]
-            if len(texts) < 15:
-                continue
-            if not re.match(r"^\d+$", texts[0]):
-                continue
-            if texts[1] not in {"Current", "Season Start", "Season End", "Recruiting", "Signed"}:
-                continue
-            color_vals = [normalize_rating_color(c) for c in cells[2:15]]
-            add_row(texts[:16] if len(texts) >= 16 else texts[:15], color_vals)
-
-    # Cell-by-cell text fallback.
-    if not rows and header_idx is not None:
-        i = header_idx
-        while i + 14 < len(lines):
-            if not re.match(r"^\d+$", lines[i]):
-                i += 1
-                continue
-
-            if add_row(lines[i:i + 16]):
-                i += 16
-                continue
-
-            if add_row(lines[i:i + 15]):
-                i += 15
-                continue
-
-            if i + 16 < len(lines) and lines[i + 1] == "Season" and lines[i + 2] in {"Start", "End"}:
-                candidate = [lines[i], "Season " + lines[i + 2]] + lines[i + 3:i + 17]
-                if add_row(candidate):
-                    i += 17
-                    continue
-            i += 1
-
-    rows = apply_detected_colors_to_rating_rows(rows, html)
-
-    detected_color_cells = 0
-    for _row in rows:
-        detected_color_cells += sum(
-            1 for _k, _v in _row.items()
-            if _k.endswith("_color") and _v
-        )
-
-    print("RATINGS PARSER DEBUG:", {
-        "url": url,
-        "original_url": original_url if "original_url" in locals() else url,
-        "player_id": player_id,
-        "tid": tid,
-        "player": player,
-        "team": team,
-        "header_idx": header_idx,
-        "rows": len(rows),
-        "first_row": rows[0] if rows else None,
-        "detected_color_cells": detected_color_cells if "detected_color_cells" in locals() else 0,
-    }, flush=True)
+    detected_color_cells = sum(
+        1 for row in rows
+        for key, _label in RATING_DOM_COLUMNS
+        if row.get(f"{key}_color")
+    )
 
     return {
         "source_url": url,
+        "original_url": original_url,
         "player_id": player_id,
         "tid": tid,
         "player": player,
         "team": team,
         "rows": rows,
-        "debug_preview": "\\n".join(lines[:150]),
+        "baseline_row": baseline_row,
+        "dom_debug_rows": debug_rows,
+        "detected_color_cells": detected_color_cells,
+        "preview": "\\n".join(lines[:120]),
     }
+
+
+def parse_ratings_history_url(url: str) -> dict:
+    parsed = parse_ratings_history_dom(url)
+
+    print("RATINGS PARSER DEBUG:", {
+        "url": parsed["source_url"],
+        "original_url": parsed["original_url"],
+        "player_id": parsed["player_id"],
+        "tid": parsed["tid"],
+        "player": parsed["player"],
+        "team": parsed["team"],
+        "rows": len(parsed["rows"]),
+        "baseline": {
+            "season": parsed["baseline_row"].get("season"),
+            "snapshot_type": parsed["baseline_row"].get("snapshot_type"),
+            "overall": parsed["baseline_row"].get("overall"),
+        } if parsed["baseline_row"] else None,
+        "first_row": parsed["rows"][0] if parsed["rows"] else None,
+        "detected_color_cells": parsed["detected_color_cells"],
+    }, flush=True)
+
+    return {
+        "source_url": parsed["source_url"],
+        "player_id": parsed["player_id"],
+        "tid": parsed["tid"],
+        "player": parsed["player"],
+        "team": parsed["team"],
+        "rows": parsed["rows"],
+        "debug_preview": parsed["preview"],
+    }
+
 
 def normalize_rating_color(cell) -> str:
     """

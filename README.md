@@ -315,3 +315,16 @@ Reframes Potential correctly:
 - Current ratings only calculate realized/remaining development
 - all projected ratings cap at 100
 - FT displayed but excluded from total projected OVR
+
+
+## v44 manual baseline color overrides
+
+Adds manual color overrides for the Potential Engine:
+- overrides are stored per player/rating
+- manual colors take priority over detected/inferred colors
+- useful when WIS color classes are not captured reliably
+- Potential board shows manual/detected/inferred/fixed counts
+
+
+## v45 deterministic potential parser + verifier
+Adds DOM-first RatingsHistory parser and /potential-debug/{player_id}.

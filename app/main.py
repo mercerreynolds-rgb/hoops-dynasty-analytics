@@ -9,8 +9,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlmodel import Session, select, delete
 
 from app.database import get_session, init_db
-from app.models import Game, PlayerGameStat, PlayByPlayEvent, LineupSegment, PlayerImpact, PlayerRatingSnapshot, TrackedTeam
-from app.parser import parse_game_url, parse_ratings_history_url, parse_game_log_url, parse_team_ratings_url
+from app.models import Game, PlayerGameStat, PlayByPlayEvent, LineupSegment, PlayerImpact, PlayerRatingSnapshot, PlayerPotentialColorOverride, TrackedTeam
+from app.parser import parse_game_url, parse_ratings_history_url, parse_game_log_url, parse_team_ratings_url, parse_ratings_history_dom
 from app.ratings import calculate_box_ratings
 from app.wis_client import wis_auth_status, get_wis_session
 from app.impact import calculate_game_impacts
@@ -1202,7 +1202,9 @@ def expected_growth_from_start(color: str, start_value: float, rating_key: str) 
     return max(0, min(100 - start_value, base))
 
 
-def build_potential_summary(rows):
+def build_potential_summary(rows, color_overrides: dict | None = None):
+    color_overrides = color_overrides or {}
+
     summary = build_rating_summary(rows)
     if not summary:
         return None
@@ -1216,7 +1218,7 @@ def build_potential_summary(rows):
     current_total = 0
     realized_total = 0
     remaining_total = 0
-    color_source_counts = {"detected": 0, "inferred": 0, "fixed": 0}
+    color_source_counts = {"detected": 0, "inferred": 0, "fixed": 0, "manual": 0}
 
     for key, label, include_in_total in RATING_META:
         start_val = rating_value(start, key)
@@ -1228,15 +1230,24 @@ def build_potential_summary(rows):
             color_source = "fixed"
             color_source_counts["fixed"] += 1
         else:
-            detected_color = rating_color(start, key)
-            if detected_color:
-                color = detected_color
-                color_source = "detected"
-                color_source_counts["detected"] += 1
+            override_color = (color_overrides.get(key) or "").lower().strip()
+            if override_color:
+                color = override_color
+                color_source = "manual"
+                color_source_counts.setdefault("manual", 0)
+                color_source_counts["manual"] += 1
             else:
-                color = infer_color_from_growth(realized_growth)
-                color_source = "inferred"
-                color_source_counts["inferred"] += 1
+                detected_color = rating_color(start, key)
+                if detected_color:
+                    color = detected_color
+                    color_source = "detected"
+                    color_source_counts["detected"] += 1
+                else:
+                    # Inferred colors are low-confidence. They remain visible,
+                    # but should not be treated as final truth when you know the baseline color.
+                    color = infer_color_from_growth(realized_growth)
+                    color_source = "inferred"
+                    color_source_counts["inferred"] += 1
 
         expected_growth = expected_growth_from_start(color, start_val, key)
         projected_peak = min(100, round(start_val + expected_growth, 1))
@@ -1308,6 +1319,16 @@ def build_potential_summary(rows):
     }
 
 
+
+def get_color_overrides(session: Session, player_id: str) -> dict:
+    if not player_id:
+        return {}
+    rows = session.exec(
+        select(PlayerPotentialColorOverride).where(PlayerPotentialColorOverride.player_id == player_id)
+    ).all()
+    return {r.rating_key: r.color for r in rows if r.color}
+
+
 def build_all_potential_rows(session: Session, team: str = ""):
     snapshots = session.exec(select(PlayerRatingSnapshot)).all()
     grouped = {}
@@ -1319,7 +1340,8 @@ def build_all_potential_rows(session: Session, team: str = ""):
 
     rows = []
     for (player, player_id, snap_team), snap_rows in grouped.items():
-        potential = build_potential_summary(snap_rows)
+        overrides = get_color_overrides(session, player_id)
+        potential = build_potential_summary(snap_rows, color_overrides=overrides)
         if not potential:
             continue
 
@@ -1342,6 +1364,7 @@ def build_all_potential_rows(session: Session, team: str = ""):
             "detected_colors": potential["color_source_counts"]["detected"],
             "inferred_colors": potential["color_source_counts"]["inferred"],
             "fixed_colors": potential["color_source_counts"]["fixed"],
+            "manual_colors": potential["color_source_counts"].get("manual", 0),
         })
 
     rows.sort(key=lambda r: (r["projected_ovr"], r["remaining_total"]), reverse=True)
@@ -1361,16 +1384,83 @@ def potential_dashboard(request: Request, team: str = "", session: Session = Dep
     )
 
 
+
+@app.post("/potential/{player_id}/colors")
+async def save_potential_colors(player_id: str, request: Request, session: Session = Depends(get_session)):
+    form = await request.form()
+    valid_colors = {"", "green", "blue", "black", "yellow", "red"}
+    valid_keys = {key for key, _label, _include in RATING_META if key != "work_ethic"}
+
+    existing = session.exec(
+        select(PlayerPotentialColorOverride).where(PlayerPotentialColorOverride.player_id == player_id)
+    ).all()
+    for row in existing:
+        session.delete(row)
+    session.commit()
+
+    for key in valid_keys:
+        color = str(form.get(f"color_{key}", "")).strip().lower()
+        if color not in valid_colors:
+            color = ""
+        if color:
+            session.add(PlayerPotentialColorOverride(player_id=player_id, rating_key=key, color=color))
+
+    session.commit()
+    return RedirectResponse(f"/potential/{player_id}", status_code=303)
+
+
+
+@app.get("/potential-debug/{player_id}", response_class=HTMLResponse)
+def potential_debug(player_id: str, request: Request, tid: str = "", session: Session = Depends(get_session)):
+    existing = session.exec(
+        select(PlayerRatingSnapshot).where(PlayerRatingSnapshot.player_id == player_id)
+    ).first()
+
+    if existing and existing.source_url:
+        url = existing.source_url
+    elif tid:
+        url = f"https://www.whatifsports.com/hd/PlayerProfile/RatingsHistory.aspx?tid={tid}&pid={player_id}"
+    else:
+        url = f"https://www.whatifsports.com/hd/PlayerProfile/RatingsHistory.aspx?pid={player_id}"
+
+    parsed = parse_ratings_history_dom(url)
+
+    return templates.TemplateResponse(
+        "potential_debug.html",
+        {
+            "request": request,
+            "player_id": player_id,
+            "url": parsed.get("source_url"),
+            "original_url": parsed.get("original_url"),
+            "player": parsed.get("player") or player_id,
+            "team": parsed.get("team"),
+            "rows_count": len(parsed.get("rows", [])),
+            "detected_color_cells": parsed.get("detected_color_cells"),
+            "baseline": parsed.get("baseline_row"),
+            "debug_rows": parsed.get("dom_debug_rows", []),
+        },
+    )
+
+
 @app.get("/potential/{player_id}", response_class=HTMLResponse)
 def potential_player_detail(player_id: str, request: Request, session: Session = Depends(get_session)):
     rows = session.exec(
         select(PlayerRatingSnapshot).where(PlayerRatingSnapshot.player_id == player_id)
     ).all()
     rows = sorted(rows, key=lambda r: (int(r.season or 0), r.id or 0), reverse=True)
-    potential = build_potential_summary(rows)
+    overrides = get_color_overrides(session, player_id)
+    potential = build_potential_summary(rows, color_overrides=overrides)
     return templates.TemplateResponse(
         "potential_detail.html",
-        {"request": request, "rows": rows, "potential": potential, "player": rows[0].player if rows else player_id, "player_id": player_id},
+        {
+            "request": request,
+            "rows": rows,
+            "potential": potential,
+            "player": rows[0].player if rows else player_id,
+            "player_id": player_id,
+            "color_options": ["", "green", "blue", "black", "yellow", "red"],
+            "overrides": overrides,
+        },
     )
 
 
