@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>Ratings Sync</h2>
+  <form method="post" action="/sync-ratings-all">
+    <button type="submit">Sync All Ratings</button>
+  </form>
+  {% if last_sync_result %}
+  <h3>Last Ratings Sync Result</h3>
+  <table>
+    <tr>
+      <th>Source</th><th>Players Found</th><th>Imported Players</th><th>Imported Rows</th><th>Errors</th>
+    </tr>
+    {% for r in last_sync_result %}
+    <tr>
+      <td>{{ r.label or r.source }}</td>
+      <td>{{ r.players_found }}</td>
+      <td>{{ r.imported_players }}</td>
+      <td>{{ r.imported_rows }}</td>
+      <td>{{ r.errors }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Ratings History Import</h2>
+  <p class="muted">Paste a WhatIfSports RatingsHistory.aspx URL. Optional player/team names help label the player if the page does not expose it cleanly.</p>
+  <form method="post" action="/ratings/import">
+    <input type="text" name="url" placeholder="https://www.whatifsports.com/hd/PlayerProfile/RatingsHistory.aspx?tid=...&pid=..." required>
+    <br><br>
+    <input type="text" name="player_name" placeholder="Player name (optional)">
+    <br><br>
+    <input type="text" name="team" placeholder="Team (optional)">
+    <br><br>
+    <button type="submit">Import Ratings History</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Imported Rating Profiles</h2>
+  <p class="muted">Growth uses the player’s lowest-season “Season Start” row as the baseline.</p>
+  {% if player_rows %}
+  <table>
+    <tr>
+      <th>Player</th><th>Team</th><th>Current OVR</th><th>OVR Growth</th><th>Best Role</th><th>Role Score</th><th>Snapshots</th>
+    </tr>
+    {% for p in player_rows %}
+    <tr>
+      <td><a href="/ratings/{{ p.player_id }}">{{ p.player }}</a></td>
+      <td>{{ p.team }}</td>
+      <td>{{ p.current_ovr }}</td>
+      <td>{{ p.growth_ovr }}</td>
+      <td>{{ p.best_role }}</td>
+      <td>{{ "%.1f"|format(p.best_role_score) }}</td>
+      <td>{{ p.snapshots }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No ratings imported yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
