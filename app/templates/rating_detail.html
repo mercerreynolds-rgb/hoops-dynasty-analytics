@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2>{{ player }} — Ratings Development</h2>
+  <p><a href="/ratings">← Back to ratings</a></p>
+  {% if summary and summary.best_role %}
+  <p>
+    <span class="pill">Current OVR {{ summary.current.overall }}</span>
+    <span class="pill">OVR Growth {{ summary.growth.overall }}</span>
+    <span class="pill">Baseline: {{ summary.baseline_note }}</span>
+    <span class="pill">Best Role: {{ summary.best_role.role }} {{ "%.1f"|format(summary.best_role.score) }}</span>
+  </p>
+  {% endif %}
+</div>
+
+{% if summary %}
+<div class="card">
+  <h2>Role Scores</h2>
+  <table>
+    <tr><th>Role</th><th>Score</th></tr>
+    {% for r in summary.role_scores %}
+    <tr>
+      <td>{{ r.role }}</td>
+      <td>{{ "%.1f"|format(r.score) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Growth: First Season Start → Current</h2>
+  <table>
+    <tr><th>Rating</th><th>Start</th><th>Current</th><th>Growth</th></tr>
+    <tr><td>A</td><td>{{ summary.start.athleticism }}</td><td>{{ summary.current.athleticism }}</td><td>{{ summary.growth.athleticism }}</td></tr>
+    <tr><td>SPD</td><td>{{ summary.start.speed }}</td><td>{{ summary.current.speed }}</td><td>{{ summary.growth.speed }}</td></tr>
+    <tr><td>REB</td><td>{{ summary.start.rebounding }}</td><td>{{ summary.current.rebounding }}</td><td>{{ summary.growth.rebounding }}</td></tr>
+    <tr><td>DE</td><td>{{ summary.start.defense }}</td><td>{{ summary.current.defense }}</td><td>{{ summary.growth.defense }}</td></tr>
+    <tr><td>BLK</td><td>{{ summary.start.shot_blocking }}</td><td>{{ summary.current.shot_blocking }}</td><td>{{ summary.growth.shot_blocking }}</td></tr>
+    <tr><td>LP</td><td>{{ summary.start.low_post }}</td><td>{{ summary.current.low_post }}</td><td>{{ summary.growth.low_post }}</td></tr>
+    <tr><td>PER</td><td>{{ summary.start.perimeter }}</td><td>{{ summary.current.perimeter }}</td><td>{{ summary.growth.perimeter }}</td></tr>
+    <tr><td>BH</td><td>{{ summary.start.ball_handling }}</td><td>{{ summary.current.ball_handling }}</td><td>{{ summary.growth.ball_handling }}</td></tr>
+    <tr><td>P</td><td>{{ summary.start.passing }}</td><td>{{ summary.current.passing }}</td><td>{{ summary.growth.passing }}</td></tr>
+    <tr><td>WE</td><td>{{ summary.start.work_ethic }}</td><td>{{ summary.current.work_ethic }}</td><td>{{ summary.growth.work_ethic }}</td></tr>
+    <tr><td>ST</td><td>{{ summary.start.stamina }}</td><td>{{ summary.current.stamina }}</td><td>{{ summary.growth.stamina }}</td></tr>
+    <tr><td>OVR</td><td>{{ summary.start.overall }}</td><td>{{ summary.current.overall }}</td><td>{{ summary.growth.overall }}</td></tr>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Ratings History</h2>
+  <p class="muted">Color shown in parentheses when detected from WhatIfSports HTML.</p>
+  <table>
+    <tr>
+      <th>Season</th><th>Type</th><th>A</th><th>SPD</th><th>REB</th><th>DE</th><th>BLK</th><th>LP</th><th>PER</th><th>BH</th><th>P</th><th>WE</th><th>ST</th><th>DU</th><th>FT</th><th>OVR</th>
+    </tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.season }}</td><td>{{ r.snapshot_type }}</td>
+      <td>{{ r.athleticism }}{% if r.athleticism_color %} ({{ r.athleticism_color }}){% endif %}</td><td>{{ r.speed }}{% if r.speed_color %} ({{ r.speed_color }}){% endif %}</td><td>{{ r.rebounding }}{% if r.rebounding_color %} ({{ r.rebounding_color }}){% endif %}</td><td>{{ r.defense }}{% if r.defense_color %} ({{ r.defense_color }}){% endif %}</td><td>{{ r.shot_blocking }}{% if r.shot_blocking_color %} ({{ r.shot_blocking_color }}){% endif %}</td><td>{{ r.low_post }}{% if r.low_post_color %} ({{ r.low_post_color }}){% endif %}</td>
+      <td>{{ r.perimeter }}{% if r.perimeter_color %} ({{ r.perimeter_color }}){% endif %}</td><td>{{ r.ball_handling }}{% if r.ball_handling_color %} ({{ r.ball_handling_color }}){% endif %}</td><td>{{ r.passing }}{% if r.passing_color %} ({{ r.passing_color }}){% endif %}</td><td>{{ r.work_ethic }}{% if r.work_ethic_color %} ({{ r.work_ethic_color }}){% endif %}</td><td>{{ r.stamina }}{% if r.stamina_color %} ({{ r.stamina_color }}){% endif %}</td><td>{{ r.durability }}</td><td>{{ r.free_throw }}</td><td>{{ r.overall }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
