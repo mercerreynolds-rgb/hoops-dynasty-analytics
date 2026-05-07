@@ -224,3 +224,15 @@ Adds:
 - role mix summary
 - simple flags
 - 4-year vs 5-year redshirt scenario comparison
+
+
+## v33 Triangle + Fullcourt Press system fit
+
+Preserves existing database schema and projection inputs.
+
+Changes:
+- removes silly Flag column
+- replaces generic basketball role labels with HD-system-oriented roles
+- adds Triangle Fit, Press Fit, and Combined System Fit
+- adds sort options for System/Triangle/Press fit
+- adds player detail section explaining projected system fit

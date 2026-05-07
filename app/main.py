@@ -1248,19 +1248,116 @@ def projected_role_scores(projection):
     return scores
 
 
-def projection_flag(player_row):
-    growth = player_row["growth_ovr"]
-    projected = player_row["projected_ovr"]
-    tier = player_row["profile"].development_tier
-    if projected >= 760:
-        return "Star ceiling"
-    if growth >= 120:
-        return "Huge development upside"
-    if tier in {"green", "blue"} and projected < 650:
-        return "Minutes investment risk"
-    if projected >= 700:
-        return "Strong rotation piece"
-    return "Depth / monitor"
+
+TRIANGLE_WEIGHTS = {
+    # Triangle needs balanced decision/creation/scoring.
+    "athleticism": 0.45,
+    "speed": 0.35,
+    "defense": 0.55,
+    "low_post": 0.85,
+    "perimeter": 1.00,
+    "ball_handling": 1.05,
+    "passing": 1.15,
+    "stamina": 0.45,
+}
+
+PRESS_WEIGHTS = {
+    # Fullcourt press magnifies DE/ST/SPD and values enough depth/athleticism.
+    "athleticism": 0.75,
+    "speed": 1.00,
+    "defense": 1.45,
+    "rebounding": 0.45,
+    "shot_blocking": 0.35,
+    "stamina": 1.25,
+}
+
+TRIANGLE_PRESS_COMBINED_WEIGHTS = {
+    "triangle": 0.50,
+    "press": 0.50,
+}
+
+
+def weighted_score_from_projection(projection, weights):
+    ratings = projected_rating_map(projection)
+    total_weight = sum(weights.values()) or 1
+    return sum(ratings.get(key, 0) * weight for key, weight in weights.items()) / total_weight
+
+
+def weighted_score_from_baseline(baseline, weights):
+    total_weight = sum(weights.values()) or 1
+    total = 0
+    for key, weight in weights.items():
+        total += projection_rating_value(baseline, key) * weight
+    return total / total_weight
+
+
+def system_fit_grade(score):
+    if score >= 85:
+        return "Elite"
+    if score >= 78:
+        return "Excellent"
+    if score >= 72:
+        return "Good"
+    if score >= 66:
+        return "Playable"
+    if score >= 60:
+        return "Risk"
+    return "Poor Fit"
+
+
+def triangle_press_fit(projection, baseline):
+    triangle_projected = weighted_score_from_projection(projection, TRIANGLE_WEIGHTS)
+    press_projected = weighted_score_from_projection(projection, PRESS_WEIGHTS)
+    triangle_current = weighted_score_from_baseline(baseline, TRIANGLE_WEIGHTS)
+    press_current = weighted_score_from_baseline(baseline, PRESS_WEIGHTS)
+
+    combined_projected = (
+        triangle_projected * TRIANGLE_PRESS_COMBINED_WEIGHTS["triangle"]
+        + press_projected * TRIANGLE_PRESS_COMBINED_WEIGHTS["press"]
+    )
+    combined_current = (
+        triangle_current * TRIANGLE_PRESS_COMBINED_WEIGHTS["triangle"]
+        + press_current * TRIANGLE_PRESS_COMBINED_WEIGHTS["press"]
+    )
+
+    return {
+        "triangle_projected": triangle_projected,
+        "press_projected": press_projected,
+        "combined_projected": combined_projected,
+        "triangle_current": triangle_current,
+        "press_current": press_current,
+        "combined_current": combined_current,
+        "triangle_grade": system_fit_grade(triangle_projected),
+        "press_grade": system_fit_grade(press_projected),
+        "combined_grade": system_fit_grade(combined_projected),
+        "fit_delta": combined_projected - combined_current,
+    }
+
+
+def projected_role_scores(projection):
+    # Override old generic basketball roles with HD-system-oriented evaluation buckets.
+    scores = [
+        {"role": "Triangle Creator", "score": weighted_score_from_projection(projection, {
+            "ball_handling": 1.25, "passing": 1.35, "perimeter": 1.05, "speed": 0.55, "stamina": 0.45
+        })},
+        {"role": "Triangle Scorer", "score": weighted_score_from_projection(projection, {
+            "perimeter": 1.25, "low_post": 1.05, "ball_handling": 0.75, "passing": 0.65, "athleticism": 0.55
+        })},
+        {"role": "Triangle Big Hub", "score": weighted_score_from_projection(projection, {
+            "low_post": 1.25, "passing": 0.95, "rebounding": 1.00, "defense": 0.85, "stamina": 0.55
+        })},
+        {"role": "Press Guard/Wing", "score": weighted_score_from_projection(projection, {
+            "defense": 1.45, "speed": 1.15, "stamina": 1.15, "athleticism": 0.85, "ball_handling": 0.45
+        })},
+        {"role": "Press Big", "score": weighted_score_from_projection(projection, {
+            "defense": 1.25, "rebounding": 1.25, "stamina": 1.05, "athleticism": 0.75, "shot_blocking": 0.65
+        })},
+        {"role": "Two-Way System Fit", "score": weighted_score_from_projection(projection, {
+            "defense": 1.25, "stamina": 0.90, "passing": 0.85, "ball_handling": 0.80, "perimeter": 0.80, "speed": 0.75
+        })},
+    ]
+    scores.sort(key=lambda r: r["score"], reverse=True)
+    return scores
 
 
 def get_projection_players(session: Session, team: str = ""):
@@ -1281,6 +1378,7 @@ def get_projection_players(session: Session, team: str = ""):
         profile = get_or_create_projection_profile(session, baseline)
         projection = project_player(profile, baseline)
         role_scores = projected_role_scores(projection)
+        fit = triangle_press_fit(projection, baseline)
         row = {
             "player_id": player_id,
             "player": baseline.player,
@@ -1292,8 +1390,12 @@ def get_projection_players(session: Session, team: str = ""):
             "growth_ovr": projection["growth_ovr"],
             "best_role": role_scores[0]["role"] if role_scores else "",
             "best_role_score": role_scores[0]["score"] if role_scores else 0,
+            "triangle_fit": fit["triangle_projected"],
+            "press_fit": fit["press_projected"],
+            "system_fit": fit["combined_projected"],
+            "system_grade": fit["combined_grade"],
+            "fit_delta": fit["fit_delta"],
         }
-        row["flag"] = projection_flag(row)
         players.append(row)
     players.sort(key=lambda r: r["projected_ovr"], reverse=True)
     return players
@@ -1316,6 +1418,12 @@ def projections_board(request: Request, team: str = "", sort: str = "projected",
         players.sort(key=lambda p: p["start_ovr"], reverse=True)
     elif sort == "role":
         players.sort(key=lambda p: p["best_role_score"], reverse=True)
+    elif sort == "system":
+        players.sort(key=lambda p: p["system_fit"], reverse=True)
+    elif sort == "press":
+        players.sort(key=lambda p: p["press_fit"], reverse=True)
+    elif sort == "triangle":
+        players.sort(key=lambda p: p["triangle_fit"], reverse=True)
     else:
         players.sort(key=lambda p: p["projected_ovr"], reverse=True)
 
@@ -1361,6 +1469,7 @@ def projection_detail(player_id: str, request: Request, session: Session = Depen
             "profile": profile,
             "projection": projection,
             "role_scores": projected_role_scores(projection),
+            "system_fit": triangle_press_fit(projection, baseline),
             "ratings": PROJECTION_RATINGS,
             "colors": PROJECTION_COLORS,
             "minutes_tier": MINUTES_TIER,

@@ -28,6 +28,9 @@
       <option value="growth" {% if sort == "growth" %}selected{% endif %}>Sort: Growth</option>
       <option value="start" {% if sort == "start" %}selected{% endif %}>Sort: Start OVR</option>
       <option value="role" {% if sort == "role" %}selected{% endif %}>Sort: Role Score</option>
+      <option value="system" {% if sort == "system" %}selected{% endif %}>Sort: Triangle+Press Fit</option>
+      <option value="triangle" {% if sort == "triangle" %}selected{% endif %}>Sort: Triangle Fit</option>
+      <option value="press" {% if sort == "press" %}selected{% endif %}>Sort: Press Fit</option>
     </select>
 
     <button type="submit">Apply</button>
@@ -38,12 +41,12 @@
   <h2>Quick Hits</h2>
   <h3>Highest Projected</h3>
   <table>
-    <tr><th>Player</th><th>Projected</th><th>Growth</th><th>Best Role</th></tr>
+    <tr><th>Player</th><th>Projected</th><th>System Fit</th><th>Best System Role</th></tr>
     {% for p in top_projected %}
     <tr>
       <td><a href="/projections/{{ p.player_id }}">{{ p.player }}</a></td>
       <td>{{ "%.0f"|format(p.projected_ovr) }}</td>
-      <td>{{ "%.1f"|format(p.growth_ovr) }}</td>
+      <td>{{ "%.1f"|format(p.system_fit) }} — {{ p.system_grade }}</td>
       <td>{{ p.best_role }}</td>
     </tr>
     {% endfor %}
@@ -69,7 +72,7 @@
   <table>
     <tr>
       <th>Player</th><th>Team</th><th>Baseline</th><th>Dev Tier</th><th>Seasons</th>
-      <th>Start OVR</th><th>Projected OVR</th><th>Growth</th><th>Best Role</th><th>Role Score</th><th>Flag</th>
+      <th>Start OVR</th><th>Projected OVR</th><th>Growth</th><th>Triangle</th><th>Press</th><th>System Fit</th><th>Best System Role</th><th>Role Score</th>
     </tr>
     {% for p in players %}
     <tr>
@@ -81,9 +84,11 @@
       <td>{{ "%.0f"|format(p.start_ovr) }}</td>
       <td><strong>{{ "%.0f"|format(p.projected_ovr) }}</strong></td>
       <td>{{ "%.1f"|format(p.growth_ovr) }}</td>
+      <td>{{ "%.1f"|format(p.triangle_fit) }}</td>
+      <td>{{ "%.1f"|format(p.press_fit) }}</td>
+      <td><strong>{{ "%.1f"|format(p.system_fit) }}</strong> — {{ p.system_grade }}</td>
       <td>{{ p.best_role }}</td>
       <td>{{ "%.1f"|format(p.best_role_score) }}</td>
-      <td>{{ p.flag }}</td>
     </tr>
     {% endfor %}
   </table>
@@ -93,7 +98,7 @@
 </div>
 
 <div class="card">
-  <h2>Projected Role Mix</h2>
+  <h2>Projected System Role Mix</h2>
   <table>
     <tr><th>Role</th><th>Players</th></tr>
     {% for r in role_summary %}

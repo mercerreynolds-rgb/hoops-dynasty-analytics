@@ -96,8 +96,37 @@
   </table>
 </div>
 
+
 <div class="card">
-  <h2>Role Fit</h2>
+  <h2>Triangle + Fullcourt Press Fit</h2>
+  <p class="muted">
+    These are system-fit scores using projected ratings. Color matters only through projected final ratings.
+  </p>
+  <table>
+    <tr><th>Fit</th><th>Current/Baseline</th><th>Projected</th><th>Grade</th></tr>
+    <tr>
+      <td>Triangle Offense</td>
+      <td>{{ "%.1f"|format(system_fit.triangle_current) }}</td>
+      <td><strong>{{ "%.1f"|format(system_fit.triangle_projected) }}</strong></td>
+      <td>{{ system_fit.triangle_grade }}</td>
+    </tr>
+    <tr>
+      <td>Fullcourt Press Defense</td>
+      <td>{{ "%.1f"|format(system_fit.press_current) }}</td>
+      <td><strong>{{ "%.1f"|format(system_fit.press_projected) }}</strong></td>
+      <td>{{ system_fit.press_grade }}</td>
+    </tr>
+    <tr>
+      <td>Combined System Fit</td>
+      <td>{{ "%.1f"|format(system_fit.combined_current) }}</td>
+      <td><strong>{{ "%.1f"|format(system_fit.combined_projected) }}</strong></td>
+      <td>{{ system_fit.combined_grade }}</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>System Role Fit</h2>
   <table>
     <tr><th>Projected Role</th><th>Score</th></tr>
     {% for r in role_scores %}
